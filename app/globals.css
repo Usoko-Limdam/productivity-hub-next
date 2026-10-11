@@ -58,3 +58,20 @@ input[type=checkbox]:checked::after{content:"";width:9px;height:5px;border:2px s
 .side nav button{flex-direction:column;gap:2px;font-size:11px;padding:6px 4px;flex:1;align-items:center;text-align:center}
 .content{padding:calc(20px + env(safe-area-inset-top,0px)) 16px 96px}
 .grid2{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr 1fr;gap:8px}.stat b{font-size:17px}h1{font-size:21px}}
+
+/* Projects: payments, duration, milestones */
+.sec{margin:24px 0 10px;display:flex;align-items:center;gap:8px}
+.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.meta div{display:flex;flex-direction:column;min-width:0}
+.meta span{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.meta b{font-variant-numeric:tabular-nums;font-weight:600}
+.meta small{font-size:12px;color:var(--mut)}
+.detail{border-top:1px solid var(--border);margin-top:16px;padding-top:4px}
+.detail h3{font-size:12px;margin:18px 0 2px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);font-weight:600}
+.dgrid{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+.fl{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
+.fl input{font-size:14.5px;color:var(--tx)}
+.pill.ok{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+.pill.warn{background:color-mix(in srgb,#d97706 14%,transparent);color:#d97706}
+small.neg,.mut.neg{color:var(--danger)}
+@media(max-width:820px){.meta{grid-template-columns:1fr 1fr}}

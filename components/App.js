@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Projects from './Projects';
 
 const H = { 'Content-Type': 'application/json' };
 const pad = n => String(n).padStart(2, '0');
@@ -181,31 +182,6 @@ function Goals({ of, put, del }) {
         <input name="unit" placeholder="Unit (optional)" style={{ width: 130 }} /><button className="btn pri">Add goal</button>
       </form>
     </div>
-  );
-}
-
-function Projects({ of, put, del, money }) {
-  const all = of('project');
-  const row = q => (
-    <div className="row" key={q.id}>
-      <div className="g"><b>{q.name}</b><span className="mut">{[q.client, q.val ? money(q.val) : ''].filter(Boolean).join(' · ')}</span>{q.note && <span className="mut">{q.note}</span>}</div>
-      <button className="btn sm" onClick={() => put('project', { ...q, done: !q.done })}>{q.done ? 'Reopen' : 'Mark done'}</button>
-      <button className="x" onClick={() => del(q.id)} aria-label="Delete project">×</button>
-    </div>
-  );
-  const A = all.filter(q => !q.done), D = all.filter(q => q.done);
-  return (
-    <>
-      <div className="card"><h2>New project</h2>
-        <form style={{ marginTop: 0 }} onSubmit={sub(d => put('project', { id: uid(), name: d.name, client: d.client, val: +d.val || 0, note: d.note, done: false }))}>
-          <input name="name" placeholder="Project name" required /><input name="client" placeholder="Client" /><input name="val" type="number" min="0" placeholder="Value" /><input name="note" placeholder="Notes" /><button className="btn pri">Add</button>
-        </form>
-      </div>
-      <div className="grid2">
-        <div className="card"><h2>In progress <span className="pill">{A.length}</span></h2>{A.map(row)}{!A.length && <Empty>No active projects.</Empty>}</div>
-        <div className="card"><h2>Completed <span className="pill">{D.length}</span></h2>{D.map(row)}{!D.length && <Empty>Nothing completed yet.</Empty>}</div>
-      </div>
-    </>
   );
 }
 
