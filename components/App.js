@@ -27,7 +27,7 @@ const Empty = ({ children }) => <div className="empty"><Icon n="check" /><p>{chi
 const TABS = {
   cal: ['Calendar', 'Plan your day, one task at a time.'],
   goals: ['Goals', 'Set weekly and monthly targets and watch them fill up.'],
-  proj: ['Projects', 'What you are working on, and what you have delivered.'],
+  proj: ['Engagements', 'Projects and ongoing services for your clients.'],
   money: ['Money', 'Sales, expenses and profit.'],
   set: ['Settings', 'Currency, backups and sign out.'],
 };
