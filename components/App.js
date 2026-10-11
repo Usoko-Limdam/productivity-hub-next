@@ -9,7 +9,27 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const fmt = (d, o) => d.toLocaleDateString(undefined, o);
 // Read a form's values, run fn, then clear the form.
 const sub = fn => e => { e.preventDefault(); fn(Object.fromEntries(new FormData(e.target))); e.target.reset(); };
-const TABS = { cal: 'Calendar', goals: 'Goals', proj: 'Projects', money: 'Money' };
+
+const ICONS = {
+  cal: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  goals: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  proj: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z',
+  money: 'M3 6h18v12H3zM3 10h18M7 15h3',
+  set: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
+  check: 'M20 6L9 17l-5-5',
+};
+const Icon = ({ n }) => (
+  <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={ICONS[n]} /></svg>
+);
+const Empty = ({ children }) => <div className="empty"><Icon n="check" /><p>{children}</p></div>;
+
+const TABS = {
+  cal: ['Calendar', 'Plan your day, one task at a time.'],
+  goals: ['Goals', 'Set weekly and monthly targets and watch them fill up.'],
+  proj: ['Projects', 'What you are working on, and what you have delivered.'],
+  money: ['Money', 'Sales, expenses and profit.'],
+  set: ['Settings', 'Currency, backups and sign out.'],
+};
 
 export default function App({ initial }) {
   const router = useRouter();
@@ -32,7 +52,7 @@ export default function App({ initial }) {
   const exportData = () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify({ items })], { type: 'application/json' }));
-    a.download = 'productivity-backup.json'; a.click();
+    a.download = 'workhub-backup.json'; a.click();
   };
   const importData = e => {
     const r = new FileReader();
@@ -40,7 +60,7 @@ export default function App({ initial }) {
       try {
         const j = JSON.parse(r.result), o = [];
         if (Array.isArray(j.items)) j.items.forEach(x => o.push([x.kind, x.data]));
-        else { // backup from the earlier browser-only version
+        else { // backup from the earliest browser-only version
           Object.entries(j.tasks || {}).forEach(([date, a]) => a.forEach(t => o.push(['task', { ...t, date }])));
           (j.goals || []).forEach(x => o.push(['goal', x])); (j.projects || []).forEach(x => o.push(['project', x]));
           (j.sales || []).forEach(x => o.push(['sale', x])); (j.exp || []).forEach(x => o.push(['expense', x]));
@@ -53,20 +73,34 @@ export default function App({ initial }) {
   const logout = async () => { await fetch('/api/login', { method: 'DELETE' }); router.refresh(); };
 
   return (
-    <>
-      <h1>My Productivity Hub</h1>
-      <nav>{Object.entries(TABS).map(([k, v]) => <button key={k} className={k === tab ? 'on' : ''} onClick={() => setTab(k)}>{v}</button>)}</nav>
-      {tab === 'cal' && <Calendar {...p} />}
-      {tab === 'goals' && <Goals {...p} />}
-      {tab === 'proj' && <Projects {...p} />}
-      {tab === 'money' && <Money {...p} />}
-      <div className="mut" style={{ marginTop: 20, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button className="btn sm" onClick={exportData}>Export backup</button>
-        <label className="btn sm">Import<input type="file" accept=".json" hidden onChange={importData} /></label>
-        <select value={cur} onChange={e => put('setting', { id: 'cur', v: e.target.value })}><option>₦</option><option>$</option><option>£</option></select>
-        <button className="btn sm" onClick={logout}>Log out</button>
-      </div>
-    </>
+    <div className="shell">
+      <aside className="side">
+        <div className="brand"><span className="logo">W</span>WorkHub</div>
+        <nav>
+          {Object.entries(TABS).map(([k, [label]]) => (
+            <button key={k} className={k === tab ? 'on' : ''} onClick={() => setTab(k)}><Icon n={k} /><span>{label}</span></button>
+          ))}
+        </nav>
+      </aside>
+      <section className="content fade" key={tab}>
+        <header className="ph"><h1>{TABS[tab][0]}</h1><p>{TABS[tab][1]}</p></header>
+        {tab === 'cal' && <Calendar {...p} />}
+        {tab === 'goals' && <Goals {...p} />}
+        {tab === 'proj' && <Projects {...p} />}
+        {tab === 'money' && <Money {...p} />}
+        {tab === 'set' && (
+          <div className="card">
+            <div className="setrow"><div><b>Currency</b><span className="mut">Used for sales, expenses and project values.</span></div>
+              <select value={cur} onChange={e => put('setting', { id: 'cur', v: e.target.value })}><option>₦</option><option>$</option><option>£</option></select></div>
+            <div className="setrow"><div><b>Backup</b><span className="mut">Download your data, or restore from a backup file.</span></div>
+              <span style={{ display: 'flex', gap: 8 }}><button className="btn" onClick={exportData}>Export</button>
+                <label className="btn">Import<input type="file" accept=".json" hidden onChange={importData} /></label></span></div>
+            <div className="setrow"><div><b>Sign out</b><span className="mut">You will need your password to get back in.</span></div>
+              <button className="btn" onClick={logout}>Log out</button></div>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -77,7 +111,7 @@ function Calendar({ of, put, del }) {
   const tasks = of('task');
   const off = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate();
   const move = d => { const x = new Date(y, m + d, 1); setV([x.getFullYear(), x.getMonth()]); };
-  const day = tasks.filter(t => t.date === sel);
+  const day = tasks.filter(t => t.date === sel), done = day.filter(t => t.d).length;
   return (
     <div className="grid2">
       <div className="card">
@@ -93,14 +127,15 @@ function Calendar({ of, put, del }) {
       </div>
       <div className="card">
         <h2>{fmt(new Date(sel + 'T00:00'), { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+        {day.length > 0 && <div style={{ marginBottom: 6 }}><span className="mut">{done} of {day.length} done</span><div className="bar"><b style={{ width: (done / day.length * 100) + '%' }} /></div></div>}
         {day.map(t => (
           <div className="row" key={t.id}>
             <input type="checkbox" checked={t.d} onChange={() => put('task', { ...t, d: !t.d })} />
             <span className={'g ' + (t.d ? 'done' : '')}>{t.t}</span>
-            <button className="x" onClick={() => del(t.id)}>×</button>
+            <button className="x" onClick={() => del(t.id)} aria-label="Delete task">×</button>
           </div>
         ))}
-        {!day.length && <p className="mut">No tasks yet for this day.</p>}
+        {!day.length && <Empty>Nothing planned for this day.</Empty>}
         <form onSubmit={sub(d => put('task', { id: uid(), date: sel, t: d.t, d: false }))}>
           <input name="t" placeholder="Add a task…" required /><button className="btn pri">Add</button>
         </form>
@@ -127,23 +162,23 @@ function Goals({ of, put, del }) {
   return (
     <div className="card">
       <div className="top">
-        <div>{['weekly', 'monthly'].map(t => <button key={t} className={'btn sm ' + (t === type ? 'pri' : '')} onClick={() => { setType(t); setOff(0); }}>{t[0].toUpperCase() + t.slice(1)}</button>)}</div>
-        <div><button className="btn sm" onClick={() => setOff(off - 1)}>‹</button> <b>{p.label}</b> <button className="btn sm" onClick={() => setOff(off + 1)}>›</button></div>
+        <div style={{ display: 'flex', gap: 6 }}>{['weekly', 'monthly'].map(t => <button key={t} className={'btn sm ' + (t === type ? 'pri' : '')} onClick={() => { setType(t); setOff(0); }}>{t[0].toUpperCase() + t.slice(1)}</button>)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button className="btn sm" onClick={() => setOff(off - 1)}>‹</button><b>{p.label}</b><button className="btn sm" onClick={() => setOff(off + 1)}>›</button></div>
       </div>
       {list.map(g => {
         const pc = Math.min(100, g.cur / g.tar * 100);
         return (
           <div className="row" key={g.id}>
-            <div className="g"><b className={pc >= 100 ? 'pos' : ''}>{g.title}</b> <span className="mut">{g.cur}/{g.tar} {g.unit}</span><div className="bar"><b style={{ width: pc + '%' }} /></div></div>
+            <div className="g"><span><b className={pc >= 100 ? 'pos' : ''}>{g.title}</b> <span className="mut">{g.cur}/{g.tar} {g.unit}</span></span><div className="bar"><b style={{ width: pc + '%' }} /></div></div>
             <button className="btn sm" onClick={() => step(g, -1)}>−</button><button className="btn sm" onClick={() => step(g, 1)}>+</button>
-            <button className="x" onClick={() => del(g.id)}>×</button>
+            <button className="x" onClick={() => del(g.id)} aria-label="Delete goal">×</button>
           </div>
         );
       })}
-      {!list.length && <p className="mut">No goals for this period yet.</p>}
+      {!list.length && <Empty>No goals for this period yet.</Empty>}
       <form onSubmit={sub(d => put('goal', { id: uid(), type, p: p.key, title: d.title, tar: Math.max(1, +d.tar || 1), cur: 0, unit: d.unit || '' }))}>
         <input name="title" placeholder="Goal (e.g. Close 3 deals)" required /><input name="tar" type="number" min="1" defaultValue="1" title="Target" />
-        <input name="unit" placeholder="unit (optional)" style={{ width: 130 }} /><button className="btn pri">Add goal</button>
+        <input name="unit" placeholder="Unit (optional)" style={{ width: 130 }} /><button className="btn pri">Add goal</button>
       </form>
     </div>
   );
@@ -153,22 +188,22 @@ function Projects({ of, put, del, money }) {
   const all = of('project');
   const row = q => (
     <div className="row" key={q.id}>
-      <div className="g"><b>{q.name}</b> <span className="mut">{q.client}{q.val ? ' · ' + money(q.val) : ''}</span>{q.note && <div className="mut">{q.note}</div>}</div>
+      <div className="g"><b>{q.name}</b><span className="mut">{[q.client, q.val ? money(q.val) : ''].filter(Boolean).join(' · ')}</span>{q.note && <span className="mut">{q.note}</span>}</div>
       <button className="btn sm" onClick={() => put('project', { ...q, done: !q.done })}>{q.done ? 'Reopen' : 'Mark done'}</button>
-      <button className="x" onClick={() => del(q.id)}>×</button>
+      <button className="x" onClick={() => del(q.id)} aria-label="Delete project">×</button>
     </div>
   );
   const A = all.filter(q => !q.done), D = all.filter(q => q.done);
   return (
     <>
-      <div className="card"><h2>Add project</h2>
+      <div className="card"><h2>New project</h2>
         <form style={{ marginTop: 0 }} onSubmit={sub(d => put('project', { id: uid(), name: d.name, client: d.client, val: +d.val || 0, note: d.note, done: false }))}>
           <input name="name" placeholder="Project name" required /><input name="client" placeholder="Client" /><input name="val" type="number" min="0" placeholder="Value" /><input name="note" placeholder="Notes" /><button className="btn pri">Add</button>
         </form>
       </div>
       <div className="grid2">
-        <div className="card"><h2>Current ({A.length})</h2>{A.map(row)}{!A.length && <p className="mut">None.</p>}</div>
-        <div className="card"><h2>Completed ({D.length})</h2>{D.map(row)}{!D.length && <p className="mut">None.</p>}</div>
+        <div className="card"><h2>In progress <span className="pill">{A.length}</span></h2>{A.map(row)}{!A.length && <Empty>No active projects.</Empty>}</div>
+        <div className="card"><h2>Completed <span className="pill">{D.length}</span></h2>{D.map(row)}{!D.length && <Empty>Nothing completed yet.</Empty>}</div>
       </div>
     </>
   );
@@ -182,8 +217,9 @@ function Money({ of, put, del, money }) {
   const sum = a => a.reduce((t, x) => t + x.amt, 0), profit = sum(sales) - sum(exps);
   const list = a => a.slice().sort((x, y) => y.date.localeCompare(x.date)).map(x => (
     <div className="row" key={x.id}>
-      <div className="g"><b>{money(x.amt)}</b> <span className="mut">{x.date} · {x.label}{x.note ? ' · ' + x.note : ''}</span></div>
-      <button className="x" onClick={() => del(x.id)}>×</button>
+      <div className="g"><b>{x.label}</b><span className="mut">{x.date}{x.note ? ' · ' + x.note : ''}</span></div>
+      <span className="amt">{money(x.amt)}</span>
+      <button className="x" onClick={() => del(x.id)} aria-label="Delete entry">×</button>
     </div>
   ));
   const form = (kind, label, ph) => (
@@ -196,16 +232,16 @@ function Money({ of, put, del, money }) {
   );
   return (
     <>
-      <div className="top"><span className="mut">Showing</span><span><input type="month" value={fm} onChange={e => setFm(e.target.value)} /> <button className="btn sm" onClick={() => setFm('')}>All time</button></span></div>
+      <div className="top"><span className="mut">Showing</span><span style={{ display: 'flex', gap: 8 }}><input type="month" value={fm} onChange={e => setFm(e.target.value)} /><button className="btn sm" onClick={() => setFm('')}>All time</button></span></div>
       <div className="stats">
-        <div><span className="mut">Sales</span><b className="pos">{money(sum(sales))}</b></div>
-        <div><span className="mut">Expenses</span><b className="neg">{money(sum(exps))}</b></div>
-        <div><span className="mut">Profit</span><b className={profit < 0 ? 'neg' : 'pos'}>{money(profit)}</b></div>
+        <div className="stat"><span>Sales</span><b className="pos">{money(sum(sales))}</b></div>
+        <div className="stat"><span>Expenses</span><b className="neg">{money(sum(exps))}</b></div>
+        <div className="stat"><span>Profit</span><b className={profit < 0 ? 'neg' : ''}>{money(profit)}</b></div>
       </div>
       <datalist id="pl">{of('project').map(q => <option key={q.id} value={q.name} />)}</datalist>
       <div className="grid2">
-        <div className="card"><h2>Sales</h2>{list(sales)}{!sales.length && <p className="mut">Nothing yet.</p>}{form('sale', 'Add sale', 'Project / client')}</div>
-        <div className="card"><h2>Expenses</h2>{list(exps)}{!exps.length && <p className="mut">Nothing yet.</p>}{form('expense', 'Add expense', 'Category (e.g. Software)')}</div>
+        <div className="card"><h2>Sales</h2>{list(sales)}{!sales.length && <Empty>No sales recorded.</Empty>}{form('sale', 'Add sale', 'Project / client')}</div>
+        <div className="card"><h2>Expenses</h2>{list(exps)}{!exps.length && <Empty>No expenses recorded.</Empty>}{form('expense', 'Add expense', 'Category (e.g. Software)')}</div>
       </div>
     </>
   );
