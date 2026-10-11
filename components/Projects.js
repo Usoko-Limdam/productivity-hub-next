@@ -30,7 +30,12 @@ export default function Projects({ of, put, del, money }) {
       <h2 className="sec">In progress <span className="pill">{A.length}</span></h2>
       {A.map(card)}{!A.length && <div className="card"><Empty>No active projects.</Empty></div>}
       <h2 className="sec">Completed <span className="pill">{D.length}</span></h2>
-      {D.map(card)}{!D.length && <div className="card"><Empty>Nothing completed yet.</Empty></div>}
+      {D.map(q => open === q.id ? card(q) : (
+        <button key={q.id} className="crow" onClick={() => setOpen(q.id)}>
+          <span><b>{q.name}</b> <span className="mut">{q.client}</span></span><span className="mut">View details ›</span>
+        </button>
+      ))}
+      {!D.length && <div className="card"><Empty>Nothing completed yet.</Empty></div>}
     </>
   );
 }
