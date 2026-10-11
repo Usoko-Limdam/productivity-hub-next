@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Projects from './Projects';
+import Overview from './Overview';
 
 const H = { 'Content-Type': 'application/json' };
 const pad = n => String(n).padStart(2, '0');
@@ -12,6 +13,7 @@ const fmt = (d, o) => d.toLocaleDateString(undefined, o);
 const sub = fn => e => { e.preventDefault(); fn(Object.fromEntries(new FormData(e.target))); e.target.reset(); };
 
 const ICONS = {
+  ov: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
   cal: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
   goals: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   proj: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z',
@@ -25,6 +27,7 @@ const Icon = ({ n }) => (
 const Empty = ({ children }) => <div className="empty"><Icon n="check" /><p>{children}</p></div>;
 
 const TABS = {
+  ov: ['Overview', 'Your day and your business at a glance.'],
   cal: ['Calendar', 'Plan your day, one task at a time.'],
   goals: ['Goals', 'Set weekly and monthly targets and watch them fill up.'],
   proj: ['Engagements', 'Projects and ongoing services for your clients.'],
@@ -35,7 +38,7 @@ const TABS = {
 export default function App({ initial }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
-  const [tab, setTab] = useState('cal');
+  const [tab, setTab] = useState('ov');
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []); // avoids server/browser date mismatches
   if (!ready) return null;
@@ -85,6 +88,7 @@ export default function App({ initial }) {
       </aside>
       <section className="content fade" key={tab}>
         <header className="ph"><h1>{TABS[tab][0]}</h1><p>{TABS[tab][1]}</p></header>
+        {tab === 'ov' && <Overview {...p} go={setTab} />}
         {tab === 'cal' && <Calendar {...p} />}
         {tab === 'goals' && <Goals {...p} />}
         {tab === 'proj' && <Projects {...p} />}
