@@ -168,6 +168,8 @@ function Calendar({ of, put, del }) {
   const [[y, m], setV] = useState(() => { const n = new Date(); return [n.getFullYear(), n.getMonth()]; });
   const [sel, setSel] = useState(today);
   const tasks = of('task');
+  const allNotes = of('note');
+  const notes = allNotes.filter(note => note.date === sel);
   const off = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate();
   const move = d => { const x = new Date(y, m + d, 1); setV([x.getFullYear(), x.getMonth()]); };
   const day = tasks.filter(t => t.date === sel), done = day.filter(t => t.d).length;
@@ -179,8 +181,8 @@ function Calendar({ of, put, del }) {
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => <div key={d} className="h">{d}</div>)}
           {Array.from({ length: off }, (_, i) => <span key={'o' + i} />)}
           {Array.from({ length: n }, (_, i) => {
-            const k = `${y}-${pad(m + 1)}-${pad(i + 1)}`, t = tasks.filter(x => x.date === k);
-            return <button key={k} className={`${k === today ? 'td ' : ''}${k === sel ? 'sel' : ''}`} onClick={() => setSel(k)}>{i + 1}<small>{t.length ? `${t.filter(x => x.d).length}/${t.length}` : '·'}</small></button>;
+            const k = `${y}-${pad(m + 1)}-${pad(i + 1)}`, t = tasks.filter(x => x.date === k), hasNote = allNotes.some(note => note.date === k);
+            return <button key={k} className={`${k === today ? 'td ' : ''}${k === sel ? 'sel' : ''}`} onClick={() => setSel(k)}>{i + 1}<small>{t.length ? `${t.filter(x => x.d).length}/${t.length}` : hasNote ? 'Note' : '·'}</small></button>;
           })}
         </div>
       </div>
@@ -198,9 +200,29 @@ function Calendar({ of, put, del }) {
         <form onSubmit={submit(d => put('task', { id: uid(), date: sel, t: d.t, d: false }))}>
           <input name="t" placeholder="Add a task…" required /><button className="btn pri">Add</button>
         </form>
+        <h2 style={{ marginTop: 24 }}>Daily notes</h2>
+        <p className="mut">Context, review, or preview for this day. Notes are separate from tasks.</p>
+        {notes.map(note => <Note key={note.id} note={note} put={put} del={del} />)}
+        {!notes.length && <Empty>No notes for this day.</Empty>}
+        <form onSubmit={submit(d => put('note', { id: uid(), date: sel, text: d.text.trim() }))}>
+          <textarea name="text" placeholder="Add a note for this day…" required rows="3" style={{ flex: '1 1 100%', resize: 'vertical' }} />
+          <button className="btn pri">Add note</button>
+        </form>
       </div>
     </div>
   );
+}
+
+function Note({ note, put, del }) {
+  const [editing, setEditing] = useState(false);
+  return <div className="row" style={{ alignItems: 'flex-start' }}>
+    {editing
+      ? <textarea autoFocus defaultValue={note.text} rows="3" style={{ flex: 1, resize: 'vertical' }} aria-label="Edit note"
+          onBlur={e => { const text = e.target.value.trim(); if (text && text !== note.text) put('note', { ...note, text }); setEditing(false); }} />
+      : <span className="g" style={{ whiteSpace: 'pre-wrap' }}>{note.text}</span>}
+    <button className="x txt" onClick={() => setEditing(true)} aria-label="Edit note">Edit</button>
+    <button className="x" onClick={() => del(note.id)} aria-label="Delete note">×</button>
+  </div>;
 }
 
 function Goals({ of, put, del }) {
@@ -210,7 +232,7 @@ function Goals({ of, put, del }) {
   return (
     <div className="card">
       <div className="top">
-        <div style={{ display: 'flex', gap: 6 }}>{['weekly', 'monthly'].map(t => <button key={t} className={'btn sm ' + (t === type ? 'pri' : '')} onClick={() => { setType(t); setOff(0); }}>{t[0].toUpperCase() + t.slice(1)}</button>)}</div>
+        <div style={{ display: 'flex', gap: 6 }}>{['weekly', 'monthly', 'annual'].map(t => <button key={t} className={'btn sm ' + (t === type ? 'pri' : '')} onClick={() => { setType(t); setOff(0); }}>{t[0].toUpperCase() + t.slice(1)}</button>)}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button className="btn sm" onClick={() => setOff(off - 1)} aria-label="Previous period">‹</button><b>{p.label}</b><button className="btn sm" onClick={() => setOff(off + 1)} aria-label="Next period">›</button></div>
       </div>
       {list.map(g => {

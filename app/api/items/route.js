@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { authed } from '../../../lib/auth';
 import { sql, init } from '../../../lib/db';
 
-const KINDS = ['task', 'goal', 'project', 'sale', 'expense', 'setting'];
+const KINDS = ['task', 'note', 'goal', 'project', 'sale', 'expense', 'setting'];
 const no = () => NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 const bad = (error, status = 400) => NextResponse.json({ error }, { status });
 

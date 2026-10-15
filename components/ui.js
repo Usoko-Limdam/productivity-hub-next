@@ -14,6 +14,10 @@ export const sum = a => a.reduce((t, x) => t + (x.amt || 0), 0);
 // Weekly periods run Monday to Sunday and are keyed by their Monday; monthly ones by YYYY-MM.
 export function period(type, off) {
   const f = d => fmtD(d, { day: 'numeric', month: 'short' });
+  if (type === 'annual') {
+    const year = new Date().getFullYear() + off;
+    return { key: String(year), label: String(year) };
+  }
   if (type === 'weekly') {
     const a = new Date(); a.setDate(a.getDate() - (a.getDay() + 6) % 7 + off * 7);
     const b = new Date(a); b.setDate(b.getDate() + 6);

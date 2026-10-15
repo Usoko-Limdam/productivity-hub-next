@@ -41,7 +41,7 @@ export default function Overview({ of, put, money, go }) {
   const dest = q => go('proj', q.type === 'service' ? 'services' : 'projects');
 
   const tasks = of('task').filter(t => t.date === today), tDone = tasks.filter(t => t.d).length;
-  const goals = of('goal').filter(g => (g.type === 'weekly' && g.p === wk) || (g.type === 'monthly' && g.p === month));
+  const goals = of('goal').filter(g => (g.type === 'weekly' && g.p === wk) || (g.type === 'monthly' && g.p === month) || (g.type === 'annual' && g.p === String(now.getFullYear())));
 
   // Each card shows the first few items; the rest sit behind a link, so the page stays short.
   const CAP = { tasks: 5, dues: 4, goals: 3, active: 4 };
@@ -94,7 +94,7 @@ export default function Overview({ of, put, money, go }) {
             const pc = Math.min(100, g.cur / g.tar * 100);
             return (
               <div className="row" key={g.id}>
-                <div className="g"><span><b className={pc >= 100 ? 'pos' : ''}>{g.title}</b> <span className="mut">{g.cur}/{g.tar} {g.unit} · {g.type === 'weekly' ? 'this week' : 'this month'}</span></span><div className="bar"><b style={{ width: pc + '%' }} /></div></div>
+                <div className="g"><span><b className={pc >= 100 ? 'pos' : ''}>{g.title}</b> <span className="mut">{g.cur}/{g.tar} {g.unit} · {g.type === 'weekly' ? 'this week' : g.type === 'annual' ? 'this year' : 'this month'}</span></span><div className="bar"><b style={{ width: pc + '%' }} /></div></div>
                 <button className="btn sm" onClick={() => put('goal', { ...g, cur: g.cur + 1 })} aria-label="Add one">+</button>
               </div>
             );
