@@ -7,12 +7,19 @@ const stamp = () => new Date().toISOString();
 const fresh = type => ({
   id: uid(), type, title: '', body: '', items: [], updatedAt: stamp(),
 });
+const hasContent = note => !!(
+  (note.title || '').trim() ||
+  (note.type === 'checklist'
+    ? (note.items || []).some(item => (item.text || '').trim())
+    : (note.body || '').trim())
+);
 const updatedLabel = value => value
   ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
   : 'Not saved yet';
 
 export default function Diary({ of, put, del }) {
-  const notes = of('diary').slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  // Older versions may have saved blank records when New was clicked. Hide them without deleting stored data.
+  const notes = of('diary').filter(hasContent).slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   const [selectedId, setSelectedId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [dirty, setDirty] = useState(false);
@@ -29,7 +36,8 @@ export default function Diary({ of, put, del }) {
   const flush = () => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-    if (draft && dirty) save(draft);
+    if (draft && dirty && hasContent(draft)) save(draft);
+    else setDirty(false);
   };
   const edit = next => {
     setDraft(next);
@@ -38,13 +46,13 @@ export default function Diary({ of, put, del }) {
     // The timer intentionally survives navigation away from this screen, so the last keystroke is saved too.
     timer.current = setTimeout(() => {
       timer.current = null;
-      save(next);
+      if (hasContent(next)) save(next);
+      else setDirty(false);
     }, 600);
   };
   const create = type => {
     flush();
     const note = fresh(type);
-    put('diary', note);
     setSelectedId(note.id);
     setDraft(note);
     setDirty(false);
@@ -71,7 +79,8 @@ export default function Diary({ of, put, del }) {
     if (!draft) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-    save(draft);
+    if (hasContent(draft)) save(draft);
+    else setDirty(false);
     setDraft(null);
     setSelectedId(null);
     setDirty(false);
@@ -124,7 +133,7 @@ export default function Diary({ of, put, del }) {
           <input className="diary-title" value={draft.title || ''} onChange={e => edit({ ...draft, title: e.target.value })}
             placeholder={draft.type === 'checklist' ? 'Checklist title' : 'Note title'} aria-label="Note title" />
           <div className="mut diary-updated" aria-live="polite">
-            {dirty ? 'Saving changes…' : `Last updated ${updatedLabel(draft.updatedAt)}`}
+            {dirty ? 'Saving changes…' : hasContent(draft) ? `Last updated ${updatedLabel(draft.updatedAt)}` : 'Empty drafts are not saved.'}
           </div>
           <div className="diary-save-row">
             <button className="btn pri" onClick={saveAndClose}>Save</button>
