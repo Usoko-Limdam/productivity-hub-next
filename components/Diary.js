@@ -17,6 +17,7 @@ export default function Diary({ of, put, del }) {
   const [draft, setDraft] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [newItem, setNewItem] = useState('');
+  const [view, setView] = useState('list');
   const timer = useRef(null);
 
   const save = note => {
@@ -66,6 +67,16 @@ export default function Diary({ of, put, del }) {
     }
     del(note.id);
   };
+  const saveAndClose = () => {
+    if (!draft) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    save(draft);
+    setDraft(null);
+    setSelectedId(null);
+    setDirty(false);
+    setNewItem('');
+  };
   const addItem = e => {
     e.preventDefault();
     const text = newItem.trim();
@@ -79,24 +90,33 @@ export default function Diary({ of, put, del }) {
       <aside className="card diary-list">
         <div className="top">
           <h2 style={{ margin: 0 }}>Your notes</h2>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div className="diary-list-tools">
+            <div className="diary-view-toggle" aria-label="Notes display format">
+              <button className={'btn sm' + (view === 'list' ? ' pri' : '')} aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
+              <button className={'btn sm' + (view === 'grid' ? ' pri' : '')} aria-pressed={view === 'grid'} onClick={() => setView('grid')}>Grid</button>
+            </div>
             <button className="btn sm" onClick={() => create('note')}>New note</button>
             <button className="btn sm pri" onClick={() => create('checklist')}>New checklist</button>
           </div>
         </div>
         {!notes.length && <Empty>Your saved ideas and drafts will appear here.</Empty>}
-        {notes.map(note => (
-          <div key={note.id} className={'diary-entry' + (selectedId === note.id ? ' selected' : '')}>
-            <button className="diary-entry-main" onClick={() => select(note)}>
-              <b>{(note.title || '').trim() || (note.type === 'checklist' ? 'Untitled checklist' : 'Untitled note')}</b>
-              <span className="mut">{note.type === 'checklist' ? 'Checklist' : 'Note'} · {updatedLabel(note.updatedAt)}</span>
-              <span className="diary-preview">{note.type === 'checklist'
-                ? `${(note.items || []).filter(item => item.done).length}/${(note.items || []).length} items checked`
-                : (note.body || 'No text yet').slice(0, 110)}</span>
-            </button>
-            <button className="x" onClick={() => remove(note)} aria-label="Delete note">×</button>
-          </div>
-        ))}
+        <div className={'diary-entries ' + view}>
+          {notes.map(note => (
+            <div key={note.id} className={'diary-entry' + (selectedId === note.id ? ' selected' : '')}>
+              <button className="diary-entry-main" onClick={() => select(note)}>
+                <b>{(note.title || '').trim() || (note.type === 'checklist' ? 'Untitled checklist' : 'Untitled note')}</b>
+                <span className="mut">{note.type === 'checklist' ? 'Checklist' : 'Note'} · {updatedLabel(note.updatedAt)}</span>
+                <span className="diary-preview">{note.type === 'checklist'
+                  ? `${(note.items || []).filter(item => item.done).length}/${(note.items || []).length} items checked`
+                  : (note.body || 'No text yet').slice(0, 110)}</span>
+              </button>
+              <div className="diary-actions">
+                <button className="btn sm" onClick={() => select(note)} aria-label="Edit note" title="Edit">Edit</button>
+                <button className="btn sm" onClick={() => remove(note)} aria-label="Delete note" title="Delete">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
       </aside>
 
       <section className="card diary-editor">
@@ -105,6 +125,9 @@ export default function Diary({ of, put, del }) {
             placeholder={draft.type === 'checklist' ? 'Checklist title' : 'Note title'} aria-label="Note title" />
           <div className="mut diary-updated" aria-live="polite">
             {dirty ? 'Saving changes…' : `Last updated ${updatedLabel(draft.updatedAt)}`}
+          </div>
+          <div className="diary-save-row">
+            <button className="btn pri" onClick={saveAndClose}>Save</button>
           </div>
           {draft.type === 'checklist' ? <>
             {(draft.items || []).map(item => <div className="row" key={item.id}>
