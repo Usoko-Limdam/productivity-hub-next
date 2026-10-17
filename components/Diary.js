@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { Empty, uid } from './ui';
+import { useEffect, useRef, useState } from 'react';
+import { Empty, Icon, uid } from './ui';
 
 const stamp = () => new Date().toISOString();
 const fresh = type => ({
@@ -25,7 +25,20 @@ export default function Diary({ of, put, del }) {
   const [dirty, setDirty] = useState(false);
   const [newItem, setNewItem] = useState('');
   const [view, setView] = useState('list');
+  const [viewMenu, setViewMenu] = useState(false);
   const timer = useRef(null);
+  const viewPicker = useRef(null);
+
+  useEffect(() => {
+    const closeOutside = e => { if (!viewPicker.current?.contains(e.target)) setViewMenu(false); };
+    const closeEscape = e => { if (e.key === 'Escape') setViewMenu(false); };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeEscape);
+    };
+  }, []);
 
   const save = note => {
     const saved = { ...note, updatedAt: stamp() };
@@ -100,9 +113,17 @@ export default function Diary({ of, put, del }) {
         <div className="top">
           <h2 style={{ margin: 0 }}>Your notes</h2>
           <div className="diary-list-tools">
-            <div className="diary-view-toggle" aria-label="Notes display format">
-              <button className={'btn sm' + (view === 'list' ? ' pri' : '')} aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
-              <button className={'btn sm' + (view === 'grid' ? ' pri' : '')} aria-pressed={view === 'grid'} onClick={() => setView('grid')}>Grid</button>
+            <div className="diary-view-picker" ref={viewPicker}>
+              <button className="btn sm diary-view-button" aria-label="Choose notes view" title="Choose notes view"
+                aria-expanded={viewMenu} aria-controls="diary-view-options" onClick={() => setViewMenu(open => !open)}>
+                <Icon n="view" />
+              </button>
+              {viewMenu && <div id="diary-view-options" className="diary-view-menu" role="group" aria-label="Notes view">
+                <button className={'btn sm diary-icon-button' + (view === 'grid' ? ' active' : '')} aria-pressed={view === 'grid'}
+                  aria-label="Grid view" title="Grid view" onClick={() => { setView('grid'); setViewMenu(false); }}><Icon n="grid" /></button>
+                <button className={'btn sm diary-icon-button' + (view === 'list' ? ' active' : '')} aria-pressed={view === 'list'}
+                  aria-label="List view" title="List view" onClick={() => { setView('list'); setViewMenu(false); }}><Icon n="list" /></button>
+              </div>}
             </div>
             <button className="btn sm" onClick={() => create('note')}>New note</button>
             <button className="btn sm pri" onClick={() => create('checklist')}>New checklist</button>
