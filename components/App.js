@@ -4,14 +4,16 @@ import { useRouter } from 'next/navigation';
 import Projects from './Projects';
 import Overview from './Overview';
 import Money from './Money';
+import Diary from './Diary';
 import { Empty, Icon, fmtD, pad, period, submit, uid, ymd } from './ui';
 
 const H = { 'Content-Type': 'application/json' };
 
 const TABS = {
   ov: ['Overview', 'Your day and your business at a glance.'],
+  diary: ['Diary / Notes', 'Capture ideas, drafts, and checklists.'],
   cal: ['Calendar', 'Plan your day, one task at a time.'],
-  goals: ['Goals', 'Set weekly and monthly targets and watch them fill up.'],
+  goals: ['Goals', 'Set weekly, monthly, and annual targets and watch them fill up.'],
   proj: ['Engagements', 'Projects and ongoing services for your clients.'],
   money: ['Money', 'Sales, expenses and profit.'],
   set: ['Settings', 'Currency, backups and sign out.'],
@@ -142,6 +144,7 @@ export default function App({ initial }) {
         </header>
         <div className="fade" key={tab}>
           {tab === 'ov' && <Overview {...p} />}
+          {tab === 'diary' && <Diary {...p} />}
           {tab === 'cal' && <Calendar {...p} />}
           {tab === 'goals' && <Goals {...p} />}
           {tab === 'proj' && <Projects {...p} />}
