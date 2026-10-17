@@ -38,6 +38,7 @@ export default function App({ initial }) {
   const [items, setItems] = useState(initial);
   const [route, setRoute] = useState({ tab: 'ov', sub: null });
   const [ready, setReady] = useState(false);
+  const [mobileMore, setMobileMore] = useState(false);
   const [sync, setSync] = useState({ pending: 0, failed: 0, expired: false, saved: false });
   // Saves go out one at a time, in order. Anything that fails is kept (latest change per record) until you retry.
   const chain = useRef(Promise.resolve());
@@ -48,7 +49,7 @@ export default function App({ initial }) {
 
   useEffect(() => {
     setRoute(parseHash()); setReady(true);
-    const onPop = () => setRoute(parseHash());
+    const onPop = () => { setRoute(parseHash()); setMobileMore(false); };
     const onLeave = e => { if (pending.current || failed.current.size) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('popstate', onPop);
     window.addEventListener('beforeunload', onLeave);
@@ -85,7 +86,7 @@ export default function App({ initial }) {
   const go = (tab, sub = null) => {
     const hash = '#' + tab + (sub ? '/' + sub : '');
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
-    setRoute({ tab, sub }); window.scrollTo(0, 0);
+    setRoute({ tab, sub }); setMobileMore(false); window.scrollTo(0, 0);
   };
 
   const cur = of('setting').find(s => s.id === 'cur')?.v ?? '₦';
@@ -120,11 +121,31 @@ export default function App({ initial }) {
     <div className="shell">
       <aside className="side">
         <div className="brand"><span className="logo">W</span>WorkHub</div>
-        <nav>
+        <nav className="desktop-nav" aria-label="Main navigation">
           {Object.entries(TABS).map(([k, [label]]) => (
             <button key={k} className={k === tab ? 'on' : ''} aria-current={k === tab ? 'page' : undefined} onClick={() => go(k)}><Icon n={k} /><span>{label}</span></button>
           ))}
         </nav>
+        <nav className="mobile-nav" aria-label="Main navigation">
+          {['ov', 'cal', 'diary', 'money'].map(k => (
+            <button key={k} className={k === tab ? 'on' : ''} aria-current={k === tab ? 'page' : undefined} onClick={() => go(k)}>
+              <Icon n={k} /><span>{TABS[k][0]}</span>
+            </button>
+          ))}
+          <button className={['goals', 'proj', 'set'].includes(tab) || mobileMore ? 'on' : ''}
+            aria-label="More navigation options" aria-expanded={mobileMore} aria-controls="mobile-more-menu"
+            onClick={() => setMobileMore(open => !open)}><Icon n="more" /><span>More</span></button>
+        </nav>
+        {mobileMore && <>
+          <button className="mobile-more-backdrop" aria-label="Close navigation menu" onClick={() => setMobileMore(false)} />
+          <div className="mobile-more-menu" id="mobile-more-menu" aria-label="More sections">
+            {['goals', 'proj', 'set'].map(k => (
+              <button key={k} className={k === tab ? 'on' : ''} aria-current={k === tab ? 'page' : undefined} onClick={() => go(k)}>
+                <Icon n={k} /><span>{TABS[k][0]}</span>
+              </button>
+            ))}
+          </div>
+        </>}
       </aside>
       <section className="content">
         {sync.failed > 0 && (

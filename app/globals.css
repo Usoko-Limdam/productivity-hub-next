@@ -16,6 +16,8 @@ h1{font-size:24px;letter-spacing:-.025em;margin:0}h2{font-size:15px;font-weight:
 .side nav button{display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;background:none;color:var(--tx2);border-radius:8px;font:inherit;font-weight:500;cursor:pointer;text-align:left;transition:background .15s,color .15s}
 .side nav button:hover{background:var(--surface2);color:var(--tx)}
 .side nav button.on{background:var(--accent-soft);color:var(--accent)}
+.side .mobile-nav{display:none}
+.mobile-more-menu,.mobile-more-backdrop{display:none}
 .ic{width:18px;height:18px;flex:none}
 .content{width:100%;max-width:1080px;margin:0 auto;padding:32px 36px 60px}
 .ph{margin-bottom:22px}.ph p{margin:4px 0 0;color:var(--mut)}
@@ -55,7 +57,13 @@ input[type=checkbox]:checked::after{content:"";width:9px;height:5px;border:2px s
 .shell{grid-template-columns:1fr}
 .side{position:fixed;inset:auto 0 0 0;height:auto;z-index:20;flex-direction:row;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));border-right:0;border-top:1px solid var(--border)}
 .brand{display:none}.side nav{flex-direction:row;width:100%;justify-content:space-around}
-.side nav button{flex-direction:column;gap:2px;font-size:11px;padding:6px 4px;flex:1;align-items:center;text-align:center}
+.side nav.desktop-nav{display:none}
+.side .mobile-nav{display:flex;position:relative;z-index:1;flex-direction:row;width:100%;justify-content:space-around;gap:2px}
+.side .mobile-nav button{flex-direction:column;gap:2px;font-size:10.5px;padding:6px 3px;flex:1;min-width:0;align-items:center;text-align:center}
+.mobile-more-backdrop{display:block;position:fixed;inset:0;z-index:0;width:100%;height:100%;padding:0;border:0;background:transparent;cursor:default}
+.mobile-more-menu{display:flex;position:absolute;right:10px;bottom:calc(100% + 8px);z-index:2;min-width:190px;flex-direction:column;gap:3px;padding:7px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--sh)}
+.mobile-more-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:var(--tx2);font:inherit;text-align:left;cursor:pointer}
+.mobile-more-menu button:hover,.mobile-more-menu button.on{background:var(--accent-soft);color:var(--accent)}
 .content{padding:calc(20px + env(safe-area-inset-top,0px)) 16px 96px}
 .grid2{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr 1fr;gap:8px}.stat b{font-size:17px}h1{font-size:21px}}
 
