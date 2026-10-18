@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function WorkspaceSwitcher({ workspace, workspaces }) {
+export default function WorkspaceSwitcher({ workspace, workspaces, onSwitch }) {
   const router = useRouter(); const [busy, setBusy] = useState(false);
   if (workspaces.length < 2) return null;
   async function change(e) {
@@ -10,7 +10,7 @@ export default function WorkspaceSwitcher({ workspace, workspaces }) {
     const r = await fetch('/api/workspaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
     if (r.ok) {
       const next = workspaces.find(w => w.id === id);
-      window.history.replaceState(null, '', next?.slug === 'bravestone-learning' ? '#brave/overview' : '#ov');
+      onSwitch(next);
       router.refresh();
     } else { setBusy(false); window.alert('Could not switch workspaces.'); }
   }

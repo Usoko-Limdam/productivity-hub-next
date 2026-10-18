@@ -43,6 +43,7 @@ async function send(op, workspaceId) {
 export default function App({ initial, workspace, workspaces }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
+  const loadedWorkspace = useRef(workspace?.id);
   const [route, setRoute] = useState({ tab: 'ov', sub: null });
   const [ready, setReady] = useState(false);
   const [sync, setSync] = useState({ pending: 0, failed: 0, expired: false, saved: false });
@@ -52,6 +53,13 @@ export default function App({ initial, workspace, workspaces }) {
   const pending = useRef(0);
   const expired = useRef(false);
   const timer = useRef(null);
+
+  useEffect(() => {
+    if (loadedWorkspace.current !== workspace?.id) {
+      setItems(initial);
+      loadedWorkspace.current = workspace?.id;
+    }
+  }, [initial, workspace?.id]);
 
   useEffect(() => {
     setRoute(parseHash()); setReady(true);
@@ -92,6 +100,13 @@ export default function App({ initial, workspace, workspaces }) {
   const go = (tab, sub = null) => {
     const hash = '#' + tab + (sub ? '/' + sub : '');
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
+    setRoute({ tab, sub }); window.scrollTo(0, 0);
+  };
+  const switchWorkspaceRoute = next => {
+    const tab = next?.slug === 'bravestone-learning' ? 'brave' : 'ov';
+    const sub = tab === 'brave' ? 'overview' : null;
+    const hash = '#' + tab + (sub ? '/' + sub : '');
+    window.history.replaceState(null, '', hash);
     setRoute({ tab, sub }); window.scrollTo(0, 0);
   };
 
@@ -172,7 +187,7 @@ export default function App({ initial, workspace, workspaces }) {
         )}
         <header className="ph">
           <div><h1>{currentTitle[0]}</h1><p>{currentTitle[1]}</p></div>
-          <WorkspaceSwitcher workspace={workspace} workspaces={workspaces} />
+          <WorkspaceSwitcher workspace={workspace} workspaces={workspaces} onSwitch={switchWorkspaceRoute} />
           <span className={'sync' + (sync.saved && !sync.pending ? ' ok' : '')} role="status" aria-live="polite">
             {sync.pending > 0 ? 'Saving…' : sync.saved ? '✓ Saved' : ''}
           </span>
