@@ -5,6 +5,8 @@ import Projects from './Projects';
 import Overview from './Overview';
 import Money from './Money';
 import Diary from './Diary';
+import Bravestone from './Bravestone';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
 import { ClientsHub, MoreHub, WorkHub } from './NavigationHubs';
 import { Empty, Icon, fmtD, pad, period, submit, uid, ymd } from './ui';
 
@@ -21,23 +23,24 @@ const TABS = {
   proj: ['Engagements', 'Projects and ongoing services for your clients.'],
   money: ['Money', 'Sales, expenses and profit.'],
   set: ['Settings', 'Currency, backups and sign out.'],
+  brave: ['Bravestone Learning', 'Education and professional development.'],
 };
 
 // Where you are lives in the URL hash (#money/sales), so the phone's back button steps back through screens.
 const parseHash = () => {
-  const [t, s] = window.location.hash.slice(1).split('/');
-  return Object.hasOwn(TABS, t) ? { tab: t, sub: s || null } : { tab: 'ov', sub: null };
+  const [t, ...rest] = window.location.hash.slice(1).split('/');
+  return Object.hasOwn(TABS, t) ? { tab: t, sub: rest.join('/') || null } : { tab: 'ov', sub: null };
 };
 
-async function send(op) {
+async function send(op, workspaceId) {
   const r = op.del
-    ? await fetch('/api/items?id=' + encodeURIComponent(op.id), { method: 'DELETE' })
-    : await fetch('/api/items', { method: 'POST', headers: H, body: JSON.stringify({ kind: op.kind, id: op.id, data: op.data }) });
+    ? await fetch('/api/items?id=' + encodeURIComponent(op.id) + '&workspaceId=' + encodeURIComponent(workspaceId), { method: 'DELETE' })
+    : await fetch('/api/items', { method: 'POST', headers: H, body: JSON.stringify({ kind: op.kind, id: op.id, data: op.data, workspaceId }) });
   if (r.status === 401) { const e = new Error('expired'); e.expired = true; throw e; }
   if (!r.ok) throw new Error('save failed');
 }
 
-export default function App({ initial }) {
+export default function App({ initial, workspace, workspaces }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
   const [route, setRoute] = useState({ tab: 'ov', sub: null });
@@ -64,7 +67,7 @@ export default function App({ initial }) {
   const run = op => {
     pending.current++; report(false);
     chain.current = chain.current.then(async () => {
-      try { await send(op); failed.current.delete(op.id); }
+      try { await send(op, workspace.id); failed.current.delete(op.id); }
       catch (e) { failed.current.set(op.id, op); if (e.expired) expired.current = true; }
       pending.current--;
       if (!pending.current && !failed.current.size) {
@@ -96,6 +99,20 @@ export default function App({ initial }) {
   const money = n => cur + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
   const p = { of, put, del, money, go, sub: route.sub };
   const { tab } = route;
+  const isBravestone = workspace?.slug === 'bravestone-learning';
+  const braveTitle = {
+    overview: ['Overview', 'A view of enrolments, programmes, sessions and revenue.'],
+    programmes: ['Programmes', 'Create programme offers and schedule cohorts.'],
+    learners: ['Learners & Enrolments', 'Manage learner records, enrolments and payments.'],
+    instructors: ['Instructors', 'Keep instructor contact and expertise details.'],
+    calendar: ['Calendar', 'Schedule cohort sessions and review upcoming operations.'],
+    marketing: ['Marketing & Sales', 'Track prospective learners and corporate leads.'],
+    money: ['Money', 'Track sales, expenses, draws and profit.'],
+    tasks: ['Tasks & Operations', 'Plan and complete operational tasks.'],
+    reports: ['Reports', 'Review live programme, learner and financial totals.'],
+    settings: ['Settings', 'Workspace details and business settings.'],
+  };
+  const currentTitle = isBravestone ? (braveTitle[route.sub?.split('/')[0]] || braveTitle.overview) : TABS[tab];
 
   const exportData = () => {
     const a = document.createElement('a');
@@ -125,11 +142,11 @@ export default function App({ initial }) {
       <aside className="side">
         <div className="brand"><span className="logo">W</span>WorkHub</div>
         <nav className="desktop-nav" aria-label="Main navigation">
-          {Object.entries(TABS).filter(([k]) => !['work', 'clients', 'more'].includes(k)).map(([k, [label]]) => (
+          {isBravestone ? <><button className={tab === 'brave' ? 'on' : ''} onClick={() => go('brave', 'overview')}><Icon n="ov"/><span>Overview</span></button></> : Object.entries(TABS).filter(([k]) => !['work', 'clients', 'more', 'brave'].includes(k)).map(([k, [label]]) => (
             <button key={k} className={k === tab ? 'on' : ''} aria-current={k === tab ? 'page' : undefined} onClick={() => go(k)}><Icon n={k} /><span>{label}</span></button>
           ))}
         </nav>
-        <nav className="mobile-nav" aria-label="Main navigation">
+        {!isBravestone && <nav className="mobile-nav" aria-label="Main navigation">
           {[
             { key: 'ov', label: 'Home', active: tab === 'ov' },
             { key: 'work', label: 'Work', active: ['work', 'diary', 'cal', 'goals'].includes(tab) },
@@ -141,7 +158,7 @@ export default function App({ initial }) {
               <Icon n={key} /><span>{label}</span>
             </button>
           ))}
-        </nav>
+        </nav>}
       </aside>
       <section className="content">
         {sync.failed > 0 && (
@@ -154,12 +171,14 @@ export default function App({ initial }) {
           </div>
         )}
         <header className="ph">
-          <div><h1>{TABS[tab][0]}</h1><p>{TABS[tab][1]}</p></div>
+          <div><h1>{currentTitle[0]}</h1><p>{currentTitle[1]}</p></div>
+          <WorkspaceSwitcher workspace={workspace} workspaces={workspaces} />
           <span className={'sync' + (sync.saved && !sync.pending ? ' ok' : '')} role="status" aria-live="polite">
             {sync.pending > 0 ? 'Saving…' : sync.saved ? '✓ Saved' : ''}
           </span>
         </header>
-        <div className="fade" key={tab}>
+        <div className="fade" key={tab + ':' + route.sub}>
+          {isBravestone && tab === 'brave' && <Bravestone {...p} sub={route.sub} />}
           {tab === 'ov' && <Overview {...p} />}
           {tab === 'work' && <WorkHub go={go} />}
           {tab === 'clients' && <ClientsHub go={go} />}
