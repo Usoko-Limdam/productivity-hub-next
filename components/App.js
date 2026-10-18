@@ -32,6 +32,20 @@ const parseHash = () => {
   return Object.hasOwn(TABS, t) ? { tab: t, sub: rest.join('/') || null } : { tab: 'ov', sub: null };
 };
 
+const routeForWorkspace = workspace => {
+  const route = parseHash();
+  const isBravestone = workspace?.slug === 'bravestone-learning';
+  if (isBravestone && route.tab !== 'brave') {
+    window.history.replaceState(null, '', '#brave/overview');
+    return { tab: 'brave', sub: 'overview' };
+  }
+  if (!isBravestone && route.tab === 'brave') {
+    window.history.replaceState(null, '', '#ov');
+    return { tab: 'ov', sub: null };
+  }
+  return route;
+};
+
 async function send(op, workspaceId) {
   const r = op.del
     ? await fetch('/api/items?id=' + encodeURIComponent(op.id) + '&workspaceId=' + encodeURIComponent(workspaceId), { method: 'DELETE' })
@@ -62,13 +76,13 @@ export default function App({ initial, workspace, workspaces }) {
   }, [initial, workspace?.id]);
 
   useEffect(() => {
-    setRoute(parseHash()); setReady(true);
-    const onPop = () => setRoute(parseHash());
+    setRoute(routeForWorkspace(workspace)); setReady(true);
+    const onPop = () => setRoute(routeForWorkspace(workspace));
     const onLeave = e => { if (pending.current || failed.current.size) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('popstate', onPop);
     window.addEventListener('beforeunload', onLeave);
     return () => { window.removeEventListener('popstate', onPop); window.removeEventListener('beforeunload', onLeave); };
-  }, []);
+  }, [workspace?.slug]);
   if (!ready) return null; // avoids server/browser date mismatches
 
   const report = saved => setSync({ pending: pending.current, failed: failed.current.size, expired: expired.current, saved });
