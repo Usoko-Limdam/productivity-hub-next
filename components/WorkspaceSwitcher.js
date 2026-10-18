@@ -17,11 +17,10 @@ export default function WorkspaceSwitcher({ workspace, workspaces, onBeforeSwitc
         const body = await r.json().catch(() => ({}));
         throw new Error(body.error || 'Could not switch workspaces.');
       }
-      const next = workspaces.find(w => w.id === id);
-      const destination = next?.slug === 'bravestone-learning' ? '/#brave/overview' : '/#ov';
-      // A full document load resets the client cache and asks the server for data
-      // using the newly set, HttpOnly workspace cookie.
-      window.location.assign(destination);
+      // The route is stored in the hash, so assigning another hash would only
+      // perform an in-page navigation. Force a document reload so the server
+      // reads the newly set, HttpOnly workspace cookie and resets client state.
+      window.location.reload();
     } catch (e) {
       setError(e.message || 'Could not switch workspaces.'); setBusy(false);
     }
