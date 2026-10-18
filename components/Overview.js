@@ -9,10 +9,10 @@ export default function Overview({ of, put, money, go }) {
   const sales = of('sale'), exps = of('expense'), projects = of('project');
   const inMonth = (a, m) => a.filter(x => x.date.startsWith(m));
   const sMonth = sum(inMonth(sales, month)), sPrev = sum(inMonth(sales, prevMonth));
-  // Personal expenses (owner withdrawals) are kept out of profit.
+  // Personal-scope expenses represent founder draws and reduce the business profit shown here.
   const monthExps = inMonth(exps, month);
   const bizMonth = sum(monthExps.filter(x => x.scope !== 'personal')), perMonth = sum(monthExps.filter(x => x.scope === 'personal'));
-  const profit = sMonth - bizMonth;
+  const profit = sMonth - bizMonth - perMonth;
   const change = sPrev ? Math.round((sMonth - sPrev) / sPrev * 100) : null;
 
   // Active engagements: what is still owed, and which installments are unpaid.
@@ -48,11 +48,12 @@ export default function Overview({ of, put, money, go }) {
 
   return (
     <>
-      <div className="stats4">
+      <div className="stats5">
         <div className="stat"><span>Sales this month</span><b className="pos">{money(sMonth)}</b>
           <small>{change === null ? (sMonth ? 'No sales last month' : 'Nothing recorded yet') : `${change >= 0 ? '↑' : '↓'} ${Math.abs(change)}% vs last month`}</small></div>
-        <div className="stat"><span>Profit this month</span><b className={profit < 0 ? 'neg' : ''}>{money(profit)}</b>
-          <small>After {money(bizMonth)} business expenses{perMonth ? ` · ${money(perMonth)} taken out` : ''}</small></div>
+        <div className="stat"><span>Profit after expenses</span><b className={profit < 0 ? 'neg' : ''}>{money(profit)}</b>
+          <small>After business expenses and founder draws</small></div>
+        <div className="stat"><span>Founder draws</span><b>{money(perMonth)}</b><small>Personal expenses this month</small></div>
         <div className="stat"><span>To collect</span><b>{money(toCollect)}</b><small>{active.length} active engagement{active.length === 1 ? '' : 's'}</small></div>
         <div className="stat"><span>Tasks today</span><b>{tasks.length ? `${tDone} of ${tasks.length}` : '—'}</b><small>{tasks.length ? (tDone === tasks.length ? 'All done' : `${tasks.length - tDone} left`) : 'Nothing planned'}</small></div>
       </div>

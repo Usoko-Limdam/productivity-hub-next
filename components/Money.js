@@ -13,9 +13,9 @@ export default function Money({ of, put, del, money, sub, go }) {
 
   const inPeriod = a => a.filter(x => !fm || x.date.startsWith(fm));
   const sales = inPeriod(of('sale')), exps = inPeriod(of('expense'));
-  // Personal expenses (owner withdrawals) are money out of the business, but they are not a cost of running it.
+  // Personal-scope expenses are founder draws and reduce the business profit shown here.
   const biz = exps.filter(x => x.scope !== 'personal'), per = exps.filter(x => x.scope === 'personal');
-  const profit = sum(sales) - sum(biz), left = profit - sum(per);
+  const profit = sum(sales) - sum(biz) - sum(per);
 
   const period = (
     <div className="top">
@@ -34,11 +34,11 @@ export default function Money({ of, put, del, money, sub, go }) {
         <div className="hubs">
           <Hub title="Sales" big={money(sum(sales))} note={plural(sales.length, 'entry', 'entries')} onClick={() => goto('sales')} />
           <Hub title="Business expenses" big={money(sum(biz))} note={plural(biz.length, 'entry', 'entries')} onClick={() => goto('business')} />
-          <Hub title="Personal expenses" big={money(sum(per))} note={`${plural(per.length, 'entry', 'entries')} · not counted in profit`} onClick={() => goto('personal')} />
+          <Hub title="Founder draws" big={money(sum(per))} note={`${plural(per.length, 'entry', 'entries')} · included in profit`} onClick={() => goto('personal')} />
         </div>
         <div className="stats2">
-          <div className="stat"><span>Profit</span><b className={profit < 0 ? 'neg' : ''}>{money(profit)}</b><small>Sales minus business expenses</small></div>
-          <div className="stat"><span>Left in business</span><b className={left < 0 ? 'neg' : ''}>{money(left)}</b><small>Profit minus personal expenses</small></div>
+          <div className="stat"><span>Profit after expenses</span><b className={profit < 0 ? 'neg' : ''}>{money(profit)}</b><small>Sales minus business expenses and founder draws</small></div>
+          <div className="stat"><span>Founder draws</span><b>{money(sum(per))}</b><small>Personal expenses for this period</small></div>
         </div>
         <SalesChart sales={of('sale')} money={money} />
       </>
@@ -61,7 +61,7 @@ export default function Money({ of, put, del, money, sub, go }) {
         <div className="stat"><span>Entries</span><b>{list.length}</b></div>
         <div className="stat"><span>Average</span><b>{money(list.length ? total / list.length : 0)}</b></div>
       </div>
-      {personal && <p className="note">Personal expenses, such as founder withdrawals, are not counted in profit. They reduce “Left in business” on the Overview.</p>}
+      {personal && <p className="note">Founder draws are recorded as personal expenses and reduce profit after expenses.</p>}
       <div className="card">
         <h2>{sales_ ? 'Record a sale' : personal ? 'Record a personal expense' : 'Record a business expense'}</h2>
         <datalist id="sg">{suggest.map(s => <option key={s} value={s} />)}</datalist>
