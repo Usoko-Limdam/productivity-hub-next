@@ -38,6 +38,8 @@ export const submit = fn => e => {
 // ---- small shared components -------------------------------------------
 const ICONS = {
   ov: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+  work: 'M3 7h18v13H3zM8 7V4h8v3M3 12h18M10 12v2h4v-2',
+  clients: 'M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M16 4.2a3.5 3.5 0 0 1 0 6.6M17.5 15h1A3.5 3.5 0 0 1 22 18.5V20',
   diary: 'M4 4.5A2.5 2.5 0 0 1 6.5 2H20v16H6.5A2.5 2.5 0 0 0 4 20.5zM4 4.5v16M8 6h8M8 10h8M8 14h5',
   view: 'M3 5h8v6H3zM13 5h8v6h-8zM3 13h8v6H3zM13 13h8v6h-8z',
   grid: 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z',

@@ -5,12 +5,16 @@ import Projects from './Projects';
 import Overview from './Overview';
 import Money from './Money';
 import Diary from './Diary';
+import { ClientsHub, MoreHub, WorkHub } from './NavigationHubs';
 import { Empty, Icon, fmtD, pad, period, submit, uid, ymd } from './ui';
 
 const H = { 'Content-Type': 'application/json' };
 
 const TABS = {
   ov: ['Overview', 'Your day and your business at a glance.'],
+  work: ['Work', 'Tasks, notes, calendar and goals.'],
+  clients: ['Clients', 'Client engagements and sales.'],
+  more: ['More', 'Settings and other modules.'],
   diary: ['Diary / Notes', 'Capture ideas, drafts, and checklists.'],
   cal: ['Calendar', 'Plan your day, one task at a time.'],
   goals: ['Goals', 'Set weekly, monthly, and annual targets and watch them fill up.'],
@@ -38,7 +42,6 @@ export default function App({ initial }) {
   const [items, setItems] = useState(initial);
   const [route, setRoute] = useState({ tab: 'ov', sub: null });
   const [ready, setReady] = useState(false);
-  const [mobileMore, setMobileMore] = useState(false);
   const [sync, setSync] = useState({ pending: 0, failed: 0, expired: false, saved: false });
   // Saves go out one at a time, in order. Anything that fails is kept (latest change per record) until you retry.
   const chain = useRef(Promise.resolve());
@@ -49,7 +52,7 @@ export default function App({ initial }) {
 
   useEffect(() => {
     setRoute(parseHash()); setReady(true);
-    const onPop = () => { setRoute(parseHash()); setMobileMore(false); };
+    const onPop = () => setRoute(parseHash());
     const onLeave = e => { if (pending.current || failed.current.size) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('popstate', onPop);
     window.addEventListener('beforeunload', onLeave);
@@ -86,7 +89,7 @@ export default function App({ initial }) {
   const go = (tab, sub = null) => {
     const hash = '#' + tab + (sub ? '/' + sub : '');
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
-    setRoute({ tab, sub }); setMobileMore(false); window.scrollTo(0, 0);
+    setRoute({ tab, sub }); window.scrollTo(0, 0);
   };
 
   const cur = of('setting').find(s => s.id === 'cur')?.v ?? '₦';
@@ -122,30 +125,23 @@ export default function App({ initial }) {
       <aside className="side">
         <div className="brand"><span className="logo">W</span>WorkHub</div>
         <nav className="desktop-nav" aria-label="Main navigation">
-          {Object.entries(TABS).map(([k, [label]]) => (
+          {Object.entries(TABS).filter(([k]) => !['work', 'clients', 'more'].includes(k)).map(([k, [label]]) => (
             <button key={k} className={k === tab ? 'on' : ''} aria-current={k === tab ? 'page' : undefined} onClick={() => go(k)}><Icon n={k} /><span>{label}</span></button>
           ))}
         </nav>
         <nav className="mobile-nav" aria-label="Main navigation">
-          {['ov', 'cal', 'diary', 'money'].map(k => (
-            <button key={k} className={k === tab ? 'on' : ''} aria-current={k === tab ? 'page' : undefined} onClick={() => go(k)}>
-              <Icon n={k} /><span>{TABS[k][0]}</span>
+          {[
+            { key: 'ov', label: 'Home', active: tab === 'ov' },
+            { key: 'work', label: 'Work', active: ['work', 'diary', 'cal', 'goals'].includes(tab) },
+            { key: 'clients', label: 'Clients', active: ['clients', 'proj'].includes(tab) },
+            { key: 'money', label: 'Money', active: tab === 'money' },
+            { key: 'more', label: 'More', active: ['more', 'set'].includes(tab) },
+          ].map(({ key, label, active }) => (
+            <button key={key} className={active ? 'on' : ''} aria-current={active ? 'page' : undefined} onClick={() => go(key)}>
+              <Icon n={key} /><span>{label}</span>
             </button>
           ))}
-          <button className={['goals', 'proj', 'set'].includes(tab) || mobileMore ? 'on' : ''}
-            aria-label="More navigation options" aria-expanded={mobileMore} aria-controls="mobile-more-menu"
-            onClick={() => setMobileMore(open => !open)}><Icon n="more" /><span>More</span></button>
         </nav>
-        {mobileMore && <>
-          <button className="mobile-more-backdrop" aria-label="Close navigation menu" onClick={() => setMobileMore(false)} />
-          <div className="mobile-more-menu" id="mobile-more-menu" aria-label="More sections">
-            {['goals', 'proj', 'set'].map(k => (
-              <button key={k} className={k === tab ? 'on' : ''} aria-current={k === tab ? 'page' : undefined} onClick={() => go(k)}>
-                <Icon n={k} /><span>{TABS[k][0]}</span>
-              </button>
-            ))}
-          </div>
-        </>}
       </aside>
       <section className="content">
         {sync.failed > 0 && (
@@ -165,6 +161,9 @@ export default function App({ initial }) {
         </header>
         <div className="fade" key={tab}>
           {tab === 'ov' && <Overview {...p} />}
+          {tab === 'work' && <WorkHub go={go} />}
+          {tab === 'clients' && <ClientsHub go={go} />}
+          {tab === 'more' && <MoreHub go={go} />}
           {tab === 'diary' && <Diary {...p} />}
           {tab === 'cal' && <Calendar {...p} />}
           {tab === 'goals' && <Goals {...p} />}
