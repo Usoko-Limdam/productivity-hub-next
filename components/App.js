@@ -90,6 +90,10 @@ export default function App({ initial, workspace, workspaces }) {
     if (!ops.length) return report(false);
     ops.forEach(run);
   };
+  const prepareWorkspaceSwitch = async () => {
+    await chain.current;
+    return pending.current === 0 && failed.current.size === 0;
+  };
 
   const of = k => items.filter(x => x.kind === k).map(x => x.data);
   const put = (kind, o) => {
@@ -100,13 +104,6 @@ export default function App({ initial, workspace, workspaces }) {
   const go = (tab, sub = null) => {
     const hash = '#' + tab + (sub ? '/' + sub : '');
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
-    setRoute({ tab, sub }); window.scrollTo(0, 0);
-  };
-  const switchWorkspaceRoute = next => {
-    const tab = next?.slug === 'bravestone-learning' ? 'brave' : 'ov';
-    const sub = tab === 'brave' ? 'overview' : null;
-    const hash = '#' + tab + (sub ? '/' + sub : '');
-    window.history.replaceState(null, '', hash);
     setRoute({ tab, sub }); window.scrollTo(0, 0);
   };
 
@@ -187,7 +184,7 @@ export default function App({ initial, workspace, workspaces }) {
         )}
         <header className="ph">
           <div><h1>{currentTitle[0]}</h1><p>{currentTitle[1]}</p></div>
-          <WorkspaceSwitcher workspace={workspace} workspaces={workspaces} onSwitch={switchWorkspaceRoute} />
+          <WorkspaceSwitcher workspace={workspace} workspaces={workspaces} onBeforeSwitch={prepareWorkspaceSwitch} />
           <span className={'sync' + (sync.saved && !sync.pending ? ' ok' : '')} role="status" aria-live="polite">
             {sync.pending > 0 ? 'Saving…' : sync.saved ? '✓ Saved' : ''}
           </span>
