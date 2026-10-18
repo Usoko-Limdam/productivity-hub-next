@@ -233,6 +233,9 @@ function SalesChart({ sales, money, range }) {
     }
   }
   const max = Math.max(...months.map(m => m.v));
+  const magnitude = max > 0 ? 10 ** Math.floor(Math.log10(max)) : 1;
+  const chartMax = max > 0 ? Math.ceil(max * 1.12 / (magnitude / 10)) * (magnitude / 10) : 0;
+  const compactMoney = value => value >= 1e9 ? `${money(value / 1e9)}b` : value >= 1e6 ? `${money(value / 1e6)}m` : money(value);
   const lastPositive = months.reduce((found, month, index) => month.v > 0 ? index : found, -1);
   return (
     <div className="card">
@@ -240,15 +243,15 @@ function SalesChart({ sales, money, range }) {
       {max > 0 ? (
         <>
           <div className="chart-layout">
-            <div className="chart-y-axis" aria-hidden="true"><span>{money(max)}</span><span>{money(max / 2)}</span><span>{money(0)}</span></div>
+            <div className="chart-y-axis" aria-hidden="true"><span>{compactMoney(chartMax)}</span><span>{compactMoney(chartMax / 2)}</span><span>{money(0)}</span></div>
             <div className="chart-scroll"><div className="chart-inner" style={{ minWidth: `${Math.max(100, months.length * 48)}px` }}>
             <div className="bars" role="group" aria-label="Monthly sales in the selected date range" style={{ gridTemplateColumns: `repeat(${months.length}, minmax(32px, 1fr))` }}>
               {months.map((m, k) => {
-                const h = m.v / max * 100;
+                const h = m.v / chartMax * 100;
                 return (
                   <div className="bcol" key={m.key} tabIndex={0} style={{ '--h': h + '%' }}>
                     <i style={{ height: h + '%' }} />
-                    {k === lastPositive && <b className="bv">{money(m.v)}</b>}
+                    {k === lastPositive && <b className="bv">{compactMoney(m.v)}</b>}
                     <span className="tip">{m.full}: {money(m.v)}</span>
                   </div>
                 );
