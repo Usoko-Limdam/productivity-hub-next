@@ -267,19 +267,24 @@ function TimePicker({ name, label, value = '' }) {
   const [hour, setHour] = useState(parsed ? String(initialHours % 12 || 12) : ''), [minute, setMinute] = useState(parsed ? parsed[2] : ''), [meridiem, setMeridiem] = useState(parsed ? (initialHours >= 12 ? 'PM' : 'AM') : '');
   const provided = Boolean(hour || minute || meridiem);
   let currentValue = '';
-  if (hour && minute && meridiem) {
+  const validHour = /^(0?[1-9]|1[0-2])$/.test(hour);
+  const validMinute = /^(?:[0-9]|[1-5][0-9])$/.test(minute);
+  if (validHour && validMinute && (meridiem === 'AM' || meridiem === 'PM')) {
     let hours = Number(hour) % 12;
     if (meridiem === 'PM') hours += 12;
-    currentValue = `${String(hours).padStart(2, '0')}:${minute}`;
+    currentValue = `${String(hours).padStart(2, '0')}:${String(Number(minute)).padStart(2, '0')}`;
   }
   return <div className="calendar-field task-time-picker">
     <span>{label}</span>
     <div className="calendar-time-selects">
-      <select aria-label={`${label} hour`} value={hour} onChange={e => setHour(e.target.value)}><option value="">HH</option>{Array.from({ length: 12 }, (_, index) => String(index + 1)).map(item => <option key={item} value={item}>{item.padStart(2, '0')}</option>)}</select>
+      <input type="text" inputMode="numeric" autoComplete="off" maxLength={2} list={`${name}-hours`} aria-label={`${label} hour`} placeholder="HH" value={hour} onChange={e => setHour(e.target.value)} />
       <span aria-hidden="true">:</span>
-      <select aria-label={`${label} minutes`} value={minute} onChange={e => setMinute(e.target.value)}><option value="">MM</option>{Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0')).map(item => <option key={item} value={item}>{item}</option>)}</select>
-      <select aria-label={`${label} AM or PM`} value={meridiem} onChange={e => setMeridiem(e.target.value)}><option value="">AM/PM</option><option>AM</option><option>PM</option></select>
+      <input type="text" inputMode="numeric" autoComplete="off" maxLength={2} list={`${name}-minutes`} aria-label={`${label} minutes`} placeholder="MM" value={minute} onChange={e => setMinute(e.target.value)} />
+      <input type="text" autoComplete="off" maxLength={2} list={`${name}-meridiems`} aria-label={`${label} AM or PM`} placeholder="AM/PM" value={meridiem} onChange={e => setMeridiem(e.target.value.toUpperCase())} />
     </div>
+    <datalist id={`${name}-hours`}>{Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0')).map(item => <option key={item} value={item} />)}</datalist>
+    <datalist id={`${name}-minutes`}>{Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0')).map(item => <option key={item} value={item} />)}</datalist>
+    <datalist id={`${name}-meridiems`}><option value="AM" /><option value="PM" /></datalist>
     <input type="hidden" name={name} value={currentValue} />
     <input type="hidden" name={`${name}Provided`} value={provided ? '1' : '0'} />
   </div>;
