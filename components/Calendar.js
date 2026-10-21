@@ -265,6 +265,7 @@ function TimePicker({ name, label, value = '' }) {
   const parsed = value.match(/^(\d{2}):(\d{2})$/);
   const initialHours = parsed ? Number(parsed[1]) : 0;
   const [hour, setHour] = useState(parsed ? String(initialHours % 12 || 12) : ''), [minute, setMinute] = useState(parsed ? parsed[2] : ''), [meridiem, setMeridiem] = useState(parsed ? (initialHours >= 12 ? 'PM' : 'AM') : '');
+  const [openField, setOpenField] = useState('');
   const provided = Boolean(hour || minute || meridiem);
   let currentValue = '';
   const validHour = /^(0?[1-9]|1[0-2])$/.test(hour);
@@ -274,17 +275,25 @@ function TimePicker({ name, label, value = '' }) {
     if (meridiem === 'PM') hours += 12;
     currentValue = `${String(hours).padStart(2, '0')}:${String(Number(minute)).padStart(2, '0')}`;
   }
+  const choices = {
+    hour: Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0')),
+    minute: Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0')),
+    meridiem: ['AM', 'PM']
+  };
+  const renderPart = (part, partValue, setPartValue, placeholder, inputMode = 'text') => <div className="calendar-time-segment" key={part}>
+    <input type="text" inputMode={inputMode} autoComplete="off" maxLength={2} aria-label={`${label} ${part === 'meridiem' ? 'AM or PM' : part}`} placeholder={placeholder} value={partValue} onFocus={() => setOpenField(part)} onBlur={() => window.setTimeout(() => setOpenField(current => current === part ? '' : current), 100)} onChange={e => setPartValue(part === 'meridiem' ? e.target.value.toUpperCase() : e.target.value)} />
+    {openField === part && <div className="calendar-time-options" role="listbox" aria-label={`${label} ${part} options`} onMouseDown={e => e.preventDefault()}>
+      {choices[part].map(option => <button type="button" role="option" aria-selected={partValue === option} key={option} onClick={() => { setPartValue(option); setOpenField(''); }}>{option}</button>)}
+    </div>}
+  </div>;
   return <div className="calendar-field task-time-picker">
     <span>{label}</span>
     <div className="calendar-time-selects">
-      <input type="text" inputMode="numeric" autoComplete="off" maxLength={2} list={`${name}-hours`} aria-label={`${label} hour`} placeholder="HH" value={hour} onChange={e => setHour(e.target.value)} />
+      {renderPart('hour', hour, setHour, 'HH', 'numeric')}
       <span aria-hidden="true">:</span>
-      <input type="text" inputMode="numeric" autoComplete="off" maxLength={2} list={`${name}-minutes`} aria-label={`${label} minutes`} placeholder="MM" value={minute} onChange={e => setMinute(e.target.value)} />
-      <input type="text" autoComplete="off" maxLength={2} list={`${name}-meridiems`} aria-label={`${label} AM or PM`} placeholder="AM/PM" value={meridiem} onChange={e => setMeridiem(e.target.value.toUpperCase())} />
+      {renderPart('minute', minute, setMinute, 'MM', 'numeric')}
+      {renderPart('meridiem', meridiem, setMeridiem, 'AM/PM')}
     </div>
-    <datalist id={`${name}-hours`}>{Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0')).map(item => <option key={item} value={item} />)}</datalist>
-    <datalist id={`${name}-minutes`}>{Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0')).map(item => <option key={item} value={item} />)}</datalist>
-    <datalist id={`${name}-meridiems`}><option value="AM" /><option value="PM" /></datalist>
     <input type="hidden" name={name} value={currentValue} />
     <input type="hidden" name={`${name}Provided`} value={provided ? '1' : '0'} />
   </div>;
