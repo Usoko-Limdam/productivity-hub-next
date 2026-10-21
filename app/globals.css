@@ -131,6 +131,9 @@ small.neg,.mut.neg{color:var(--danger)}
 .transaction-head{padding:8px 6px;background:var(--surface2);color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 .transaction-row{min-height:46px;padding:8px 6px;border-bottom:1px solid var(--border)}
 .transaction-row:last-child{border-bottom:0}
+.transaction-row.managed{grid-template-columns:minmax(76px,.8fr) minmax(120px,1.7fr) minmax(105px,1.2fr) minmax(88px,1fr) minmax(72px,.7fr) auto}
+.transaction-row:hover .x{opacity:1}
+.transaction-actions{display:flex;align-items:center;justify-content:flex-end;gap:2px}
 .transaction-date,.transaction-amount{font-variant-numeric:tabular-nums;white-space:nowrap}
 .transaction-description{display:flex;min-width:0;flex-direction:column;overflow-wrap:anywhere}
 .transaction-description small{color:var(--mut)}
@@ -151,7 +154,7 @@ small.neg,.mut.neg{color:var(--danger)}
 @media(max-width:820px){.stats4{grid-template-columns:1fr 1fr}.stats5{grid-template-columns:1fr 1fr}.stat b{font-size:17px}}
 @media(max-width:560px){.money-range{align-items:stretch;flex-direction:column}.money-range label{justify-content:space-between}.money-date-field{flex:1}.money-range input[type=date]{flex:1;min-width:0}.money-range .btn{min-height:40px}}
 @media(max-width:1000px){.hubs.money-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:560px){.money-presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.money-presets .btn{justify-content:center}.money-range-arrow{display:none}.hubs.money-summary{gap:8px}.money-summary .hub{padding:13px}.money-summary .hub b{font-size:20px}.transaction-head{display:none}.transaction-row{grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:10px 2px}.transaction-date{grid-column:1;grid-row:1;font-size:12px;color:var(--mut)}.transaction-description{grid-column:1;grid-row:2}.transaction-category{grid-column:1;grid-row:3;font-size:12px;color:var(--mut)}.transaction-amount{grid-column:2;grid-row:1/3;text-align:right}.transaction-type{grid-column:2;grid-row:3;justify-self:end}}
+@media(max-width:560px){.money-presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.money-presets .btn{justify-content:center}.money-range-arrow{display:none}.hubs.money-summary{gap:8px}.money-summary .hub{padding:13px}.money-summary .hub b{font-size:20px}.transaction-head{display:none}.transaction-row{grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:10px 2px}.transaction-date{grid-column:1;grid-row:1;font-size:12px;color:var(--mut)}.transaction-description{grid-column:1;grid-row:2}.transaction-category{grid-column:1;grid-row:3;font-size:12px;color:var(--mut)}.transaction-amount{grid-column:2;grid-row:1/3;text-align:right}.transaction-type{grid-column:2;grid-row:3;justify-self:end}.transaction-actions{grid-column:2;grid-row:4}}
 
 /* ---- v3: page header, save status, sub-navigation, hubs, login ---- */
 .ph{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
@@ -247,6 +250,14 @@ small.neg,.mut.neg{color:var(--danger)}
 .module-link>.ic{color:var(--accent)}
 .module-link>span{display:flex;flex-direction:column;gap:2px}
 .module-link small{color:var(--mut);font-size:12.5px}
+
+/* Calendar task scheduling */
+.calendar-task-form{display:grid;grid-template-columns:minmax(140px,1fr) repeat(2,minmax(110px,.45fr)) auto;align-items:end}
+.calendar-task-form>label{display:flex;flex-direction:column;gap:4px;color:var(--mut);font-size:12px}
+.calendar-task-form>label input{width:100%}
+.calendar-task-time{margin-top:3px;color:var(--mut);font-size:12px;font-variant-numeric:tabular-nums}
+.calendar-task-error{margin:8px 0 0;color:var(--danger);font-size:13px}
+@media(max-width:560px){.calendar-task-form{grid-template-columns:1fr 1fr}.calendar-task-form>input[name=t],.calendar-task-form>button{grid-column:1/-1}}
 
 /* Workspace selection and Bravestone education workflows */
 .workspace-choice{max-width:780px;margin:10vh auto;padding:24px}

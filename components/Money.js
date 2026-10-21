@@ -152,7 +152,7 @@ export default function Money({ of, put, del, money, sub, go }) {
       </div>}
       <div className="card">
         <h2>{title} <span className="pill">{list.length}</span></h2>
-        {list.slice().sort((a, b) => b.date.localeCompare(a.date)).map(x => <Entry key={x.id} x={x} kind={transactions ? x._kind : kind} money={money} put={put} del={del} />)}
+        {list.slice().sort((a, b) => b.date.localeCompare(a.date)).map(x => <Entry key={x.id} x={x} kind={transactions ? x._kind : kind} money={money} put={put} del={del} transactions={transactions} />)}
         {!list.length && <Empty>{appliedRange ? 'Nothing recorded in this date range.' : 'Nothing recorded yet.'}</Empty>}
       </div>
     </>
@@ -160,8 +160,12 @@ export default function Money({ of, put, del, money, sub, go }) {
 }
 
 // One ledger row, with inline editing. For expenses the editor can also move the entry between business and personal.
-function Entry({ x, kind, money, put, del }) {
+function Entry({ x, kind, money, put, del, transactions = false }) {
   const [ed, setEd] = useState(false);
+  const sale = kind === 'sale';
+  const personal = x.scope === 'personal';
+  const category = sale ? 'Sales' : personal ? 'Founder draws' : 'Business expenses';
+  const type = sale ? 'income' : personal ? 'draw' : 'expense';
   if (ed) {
     return (
       <form className="eform" onSubmit={e => {
@@ -183,6 +187,21 @@ function Entry({ x, kind, money, put, del }) {
         )}
         <button className="btn pri sm">Save</button><button type="button" className="btn sm" onClick={() => setEd(false)}>Cancel</button>
       </form>
+    );
+  }
+  if (transactions) {
+    return (
+      <div className={`transaction-row managed ${type}`}>
+        <span className="transaction-date">{displayDate(x.date)}</span>
+        <span className="transaction-description"><b>{x.label}</b>{x.note && <small>{x.note}</small>}</span>
+        <span className="transaction-category">{category}</span>
+        <b className={'transaction-amount' + (sale ? ' pos' : '')}>{money(x.amt)}</b>
+        <span className={'transaction-type ' + type}>{sale ? 'Income' : personal ? 'Draw' : 'Expense'}</span>
+        <span className="transaction-actions">
+          <button className="x txt" onClick={() => setEd(true)} aria-label="Edit entry">Edit</button>
+          <button className="x" onClick={() => { if (confirm('Delete this entry?')) del(x.id); }} aria-label="Delete entry">×</button>
+        </span>
+      </div>
     );
   }
   return (

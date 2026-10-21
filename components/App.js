@@ -235,12 +235,17 @@ function Calendar({ of, put, del }) {
   const today = ymd(new Date());
   const [[y, m], setV] = useState(() => { const n = new Date(); return [n.getFullYear(), n.getMonth()]; });
   const [sel, setSel] = useState(today);
+  const [taskTimeError, setTaskTimeError] = useState('');
   const tasks = of('task');
   const allNotes = of('note');
   const notes = allNotes.filter(note => note.date === sel);
   const off = (new Date(y, m, 1).getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate();
   const move = d => { const x = new Date(y, m + d, 1); setV([x.getFullYear(), x.getMonth()]); };
-  const day = tasks.filter(t => t.date === sel), done = day.filter(t => t.d).length;
+  const day = tasks.filter(t => t.date === sel).sort((a, b) => {
+    if (!a.startTime) return b.startTime ? 1 : 0;
+    if (!b.startTime) return -1;
+    return a.startTime.localeCompare(b.startTime);
+  }), done = day.filter(t => t.d).length;
   return (
     <div className="grid2">
       <div className="card">
@@ -260,14 +265,35 @@ function Calendar({ of, put, del }) {
         {day.map(t => (
           <div className="row" key={t.id}>
             <input type="checkbox" checked={t.d} onChange={() => put('task', { ...t, d: !t.d })} />
-            <span className={'g ' + (t.d ? 'done' : '')}>{t.t}</span>
+            <span className={'g ' + (t.d ? 'done' : '')}>{t.t}
+              {t.startTime && t.endTime && <small className="calendar-task-time">{formatTime(t.startTime)}–{formatTime(t.endTime)}</small>}
+            </span>
             <button className="x" onClick={() => del(t.id)} aria-label="Delete task">×</button>
           </div>
         ))}
         {!day.length && <Empty>Nothing planned for this day.</Empty>}
-        <form onSubmit={submit(d => put('task', { id: uid(), date: sel, t: d.t, d: false }))}>
-          <input name="t" placeholder="Add a task…" required /><button className="btn pri">Add</button>
+        <form className="calendar-task-form" onSubmit={e => {
+          e.preventDefault();
+          const form = e.currentTarget, data = new FormData(form);
+          const startTime = data.get('startTime'), endTime = data.get('endTime');
+          if (Boolean(startTime) !== Boolean(endTime)) {
+            setTaskTimeError('Choose both a start and end time, or leave both blank.');
+            return;
+          }
+          if (startTime && endTime && endTime <= startTime) {
+            setTaskTimeError('End time must be later than start time.');
+            return;
+          }
+          setTaskTimeError('');
+          put('task', { id: uid(), date: sel, t: data.get('t').trim(), d: false, ...(startTime && endTime ? { startTime, endTime } : {}) });
+          form.reset();
+        }}>
+          <input name="t" placeholder="Add a task…" required />
+          <label><span>From</span><input name="startTime" type="time" aria-label="Start time" /></label>
+          <label><span>To</span><input name="endTime" type="time" aria-label="End time" /></label>
+          <button className="btn pri">Add</button>
         </form>
+        {taskTimeError && <p className="calendar-task-error" role="alert">{taskTimeError}</p>}
         <h2 style={{ marginTop: 24 }}>Daily notes</h2>
         <p className="mut">Context, review, or preview for this day. Notes are separate from tasks.</p>
         {notes.map(note => <Note key={note.id} note={note} put={put} del={del} />)}
@@ -279,6 +305,11 @@ function Calendar({ of, put, del }) {
       </div>
     </div>
   );
+}
+
+function formatTime(time) {
+  const [hours, minutes] = time.split(':').map(Number);
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 function Note({ note, put, del }) {
