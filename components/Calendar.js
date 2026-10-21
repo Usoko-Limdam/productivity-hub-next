@@ -36,7 +36,7 @@ export default function Calendar({ of, put, del, workspace }) {
   const [view, setView] = useState('month');
   const [taskTimeError, setTaskTimeError] = useState('');
   const [eventDraft, setEventDraft] = useState(null);
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskDraft, setTaskDraft] = useState(null);
   const [quickNote, setQuickNote] = useState('');
   const tasks = of('task');
   const events = of('event');
@@ -117,15 +117,15 @@ export default function Calendar({ of, put, del, workspace }) {
       <section className="card calendar-main" aria-label={`${view} calendar`}>
         {view === 'month' && <MonthGrid days={monthDays} today={today} selected={selectedDate} scheduled={allScheduled} notes={of('note')} onSelect={selectMonthDate} />}
         {view === 'week' && <WeekGrid days={weekDays} today={today} selected={selectedDate} scheduled={allScheduled} onSelect={setSelectedDate} />}
-        {view === 'day' && <DayTimeline date={selectedDate} items={selectedItems} onToggle={item => put('task', { ...item, d: !item.d })} onEdit={item => setEventDraft(item)} onDelete={del} />}
+        {view === 'day' && <DayTimeline date={selectedDate} items={selectedItems} onToggle={item => put('task', { ...item, d: !item.d })} onEdit={editItem} onDelete={del} />}
         <div className="calendar-legend">{TYPES.map(type => <span key={type.id}><i className={`calendar-dot ${type.color}`} />{type.label}</span>)}<span><i className="calendar-dot gray" />Task</span></div>
       </section>
 
       <div className="calendar-side">
         <section className="card calendar-agenda">
-          <div className="calendar-section-heading"><div><h2>{dateLabel(selectedDate)}</h2><span className="mut">{selectedItems.length} scheduled item{selectedItems.length === 1 ? '' : 's'}</span></div><div className="calendar-agenda-actions"><button className="btn" onClick={() => { setTaskTimeError(''); setTaskModalOpen(true); }}>＋ Add task</button><button className="btn pri" onClick={() => setEventDraft({ date: selectedDate })}>＋ Add event</button></div></div>
+          <div className="calendar-section-heading"><div><h2>{dateLabel(selectedDate)}</h2><span className="mut">{selectedItems.length} scheduled item{selectedItems.length === 1 ? '' : 's'}</span></div><div className="calendar-agenda-actions"><button className="btn" onClick={() => { setTaskTimeError(''); setTaskDraft({ date: selectedDate }); }}>＋ Add task</button><button className="btn pri" onClick={() => setEventDraft({ date: selectedDate })}>＋ Add event</button></div></div>
           {dayTasks.length > 0 && <div className="calendar-progress"><span className="mut">{done} of {dayTasks.length} tasks complete</span><div className="bar"><b style={{ width: `${done / dayTasks.length * 100}%` }} /></div></div>}
-          <Agenda items={selectedItems} onToggle={item => put('task', { ...item, d: !item.d })} onEdit={item => setEventDraft(item)} onDelete={del} />
+          <Agenda items={selectedItems} onToggle={item => put('task', { ...item, d: !item.d })} onEdit={editItem} onDelete={del} />
         </section>
 
         <section className="card calendar-notes">
@@ -143,12 +143,23 @@ export default function Calendar({ of, put, del, workspace }) {
       if (saved) setEventDraft(null);
       return saved;
     }} />}
-    {taskModalOpen && <TaskModal date={selectedDate} error={taskTimeError} onError={setTaskTimeError} onClose={() => setTaskModalOpen(false)} onSave={async task => {
+    {taskDraft && <TaskModal key={taskDraft.id || 'new'} task={taskDraft.id ? taskDraft : null} date={taskDraft.date || selectedDate} error={taskTimeError} onError={setTaskTimeError} onClose={() => setTaskDraft(null)} onSave={async task => {
       const saved = await put('task', task);
-      if (saved) setTaskModalOpen(false);
+      if (saved) {
+        setTaskDraft(null);
+        if (task.date !== selectedDate) {
+          const nextDate = new Date(`${task.date}T00:00`);
+          setSelectedDate(task.date); setMonth(nextDate.getMonth()); setYear(nextDate.getFullYear());
+        }
+      }
       return saved;
     }} />}
   </div>;
+
+  function editItem(item) {
+    if (item.recordType === 'task') { setTaskTimeError(''); setTaskDraft(item); }
+    else setEventDraft(item);
+  }
 }
 
 function Summary({ icon, value, label, detail, tone }) {
@@ -194,7 +205,7 @@ function Agenda({ items, onToggle, onEdit, onDelete }) {
       <div className="calendar-agenda-time">{item.allDay ? 'All day' : item.startTime ? <>{formatTime(item.startTime)}{item.endTime && <small>to {formatTime(item.endTime)}</small>}</> : 'Anytime'}</div>
       <div className="calendar-agenda-copy"><b className={item.d ? 'done' : ''}>{item.title}</b><span>{event ? `${type.label}${item.location ? ` · ${item.location}` : ''}` : 'Task'}{item.description ? ` · ${item.description}` : ''}</span></div>
       {event && <div className="calendar-item-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>×</button></div>}
-      {!event && <button className="x" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>×</button>}
+      {!event && <div className="calendar-item-actions calendar-task-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x txt" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>Delete</button></div>}
     </div>;
   })}</div>;
 }
@@ -208,7 +219,7 @@ function EditableNote({ note, put, del }) {
   </div>;
 }
 
-function TaskModal({ date, error, onError, onClose, onSave }) {
+function TaskModal({ task, date, error, onError, onClose, onSave }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [taskId] = useState(() => uid());
@@ -229,35 +240,37 @@ function TaskModal({ date, error, onError, onClose, onSave }) {
     if (startTime && endTime && endTime <= startTime) { onError('End time must be later than start time.'); return; }
     if (!title) return;
     onError(''); setSaveError(''); setSaving(true);
-    const result = await onSave({ id: taskId, date, t: title, d: false, ...(startTime && endTime ? { startTime, endTime } : {}) });
+    const result = await onSave({ id: task?.id || taskId, date: String(data.get('date') || date), t: title, d: task?.d || false, ...(startTime && endTime ? { startTime, endTime } : {}) });
     setSaving(false);
     if (!result) setSaveError('The task could not be saved. Check the connection and try again.');
   };
   return <div className="calendar-modal-backdrop" role="presentation">
     <section className="calendar-modal calendar-task-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-task-title">
-      <div className="calendar-modal-header"><div><span className="calendar-modal-icon">✓</span><div><h2 id="calendar-task-title">Add task</h2><p>Add a task to {dateLabel(date)}.</p></div></div><button className="x" onClick={onClose} aria-label="Close task form" disabled={saving}>×</button></div>
+      <div className="calendar-modal-header"><div><span className="calendar-modal-icon">✓</span><div><h2 id="calendar-task-title">{task ? 'Edit task' : 'Add task'}</h2><p>{task ? 'Update this task’s details and schedule.' : `Add a task to ${dateLabel(date)}.`}</p></div></div><button className="x" onClick={onClose} aria-label="Close task form" disabled={saving}>×</button></div>
       <form onSubmit={save}>
-        <label className="calendar-field full"><span>Task <b>*</b></span><input name="title" type="text" placeholder="What needs to get done?" autoFocus maxLength={200} required /></label>
-        <label className="calendar-field full"><span>Date <b>*</b></span><input type="date" value={date} readOnly aria-label="Task date" /></label>
+        <label className="calendar-field full"><span>Task <b>*</b></span><input name="title" type="text" defaultValue={task?.t || ''} placeholder="What needs to get done?" autoFocus maxLength={200} required /></label>
+        <label className="calendar-field full"><span>Date <b>*</b></span><input name="date" type="date" defaultValue={task?.date || date} required aria-label="Task date" /></label>
         <div className="calendar-field-row task-time-row">
-          <TimePicker name="startTime" label="From" />
-          <TimePicker name="endTime" label="To" />
+          <TimePicker name="startTime" label="From" value={task?.startTime || ''} />
+          <TimePicker name="endTime" label="To" value={task?.endTime || ''} />
         </div>
         {(error || saveError) && <p className="calendar-modal-error" role="alert">{saveError || error}</p>}
-        <div className="calendar-modal-actions"><button type="button" className="btn" onClick={onClose} disabled={saving}>Cancel</button><button className="btn pri" disabled={saving}>{saving ? 'Saving…' : 'Add task'}</button></div>
+        <div className="calendar-modal-actions"><button type="button" className="btn" onClick={onClose} disabled={saving}>Cancel</button><button className="btn pri" disabled={saving}>{saving ? 'Saving…' : task ? 'Save changes' : 'Add task'}</button></div>
       </form>
     </section>
   </div>;
 }
 
-function TimePicker({ name, label }) {
-  const [hour, setHour] = useState(''), [minute, setMinute] = useState(''), [meridiem, setMeridiem] = useState('');
+function TimePicker({ name, label, value = '' }) {
+  const parsed = value.match(/^(\d{2}):(\d{2})$/);
+  const initialHours = parsed ? Number(parsed[1]) : 0;
+  const [hour, setHour] = useState(parsed ? String(initialHours % 12 || 12) : ''), [minute, setMinute] = useState(parsed ? parsed[2] : ''), [meridiem, setMeridiem] = useState(parsed ? (initialHours >= 12 ? 'PM' : 'AM') : '');
   const provided = Boolean(hour || minute || meridiem);
-  let value = '';
+  let currentValue = '';
   if (hour && minute && meridiem) {
     let hours = Number(hour) % 12;
     if (meridiem === 'PM') hours += 12;
-    value = `${String(hours).padStart(2, '0')}:${minute}`;
+    currentValue = `${String(hours).padStart(2, '0')}:${minute}`;
   }
   return <div className="calendar-field task-time-picker">
     <span>{label}</span>
@@ -267,7 +280,7 @@ function TimePicker({ name, label }) {
       <select aria-label={`${label} minutes`} value={minute} onChange={e => setMinute(e.target.value)}><option value="">MM</option>{Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0')).map(item => <option key={item} value={item}>{item}</option>)}</select>
       <select aria-label={`${label} AM or PM`} value={meridiem} onChange={e => setMeridiem(e.target.value)}><option value="">AM/PM</option><option>AM</option><option>PM</option></select>
     </div>
-    <input type="hidden" name={name} value={value} />
+    <input type="hidden" name={name} value={currentValue} />
     <input type="hidden" name={`${name}Provided`} value={provided ? '1' : '0'} />
   </div>;
 }
