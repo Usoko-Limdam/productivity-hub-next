@@ -36,6 +36,7 @@ export default function Calendar({ of, put, del, workspace }) {
   const [view, setView] = useState('month');
   const [taskTimeError, setTaskTimeError] = useState('');
   const [eventDraft, setEventDraft] = useState(null);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [quickNote, setQuickNote] = useState('');
   const tasks = of('task');
   const events = of('event');
@@ -122,16 +123,9 @@ export default function Calendar({ of, put, del, workspace }) {
 
       <div className="calendar-side">
         <section className="card calendar-agenda">
-          <div className="calendar-section-heading"><div><h2>{dateLabel(selectedDate)}</h2><span className="mut">{selectedItems.length} scheduled item{selectedItems.length === 1 ? '' : 's'}</span></div><button className="btn pri" onClick={() => setEventDraft({ date: selectedDate })}>＋ Add event</button></div>
+          <div className="calendar-section-heading"><div><h2>{dateLabel(selectedDate)}</h2><span className="mut">{selectedItems.length} scheduled item{selectedItems.length === 1 ? '' : 's'}</span></div><div className="calendar-agenda-actions"><button className="btn" onClick={() => { setTaskTimeError(''); setTaskModalOpen(true); }}>＋ Add task</button><button className="btn pri" onClick={() => setEventDraft({ date: selectedDate })}>＋ Add event</button></div></div>
           {dayTasks.length > 0 && <div className="calendar-progress"><span className="mut">{done} of {dayTasks.length} tasks complete</span><div className="bar"><b style={{ width: `${done / dayTasks.length * 100}%` }} /></div></div>}
           <Agenda items={selectedItems} onToggle={item => put('task', { ...item, d: !item.d })} onEdit={item => setEventDraft(item)} onDelete={del} />
-          <form className="calendar-task-form" onSubmit={saveTask}>
-            <input name="t" placeholder="Add a task…" aria-label="Task title" required />
-            <label><span>From</span><input name="startTime" type="time" aria-label="Task start time" /></label>
-            <label><span>To</span><input name="endTime" type="time" aria-label="Task end time" /></label>
-            <button className="btn pri">Add task</button>
-          </form>
-          {taskTimeError && <p className="calendar-task-error" role="alert">{taskTimeError}</p>}
         </section>
 
         <section className="card calendar-notes">
@@ -147,6 +141,11 @@ export default function Calendar({ of, put, del, workspace }) {
     {eventDraft && <EventModal event={eventDraft.id ? eventDraft : null} date={eventDraft.date || selectedDate} workspace={workspace} onClose={() => setEventDraft(null)} onSave={async event => {
       const saved = await put('event', event);
       if (saved) setEventDraft(null);
+      return saved;
+    }} />}
+    {taskModalOpen && <TaskModal date={selectedDate} error={taskTimeError} onError={setTaskTimeError} onClose={() => setTaskModalOpen(false)} onSave={async task => {
+      const saved = await put('task', task);
+      if (saved) setTaskModalOpen(false);
       return saved;
     }} />}
   </div>;
@@ -206,6 +205,46 @@ function EditableNote({ note, put, del }) {
     ? <textarea autoFocus defaultValue={note.text} rows="3" aria-label="Edit daily note" onBlur={e => { const text = e.target.value.trim(); if (text && text !== note.text) put('note', { ...note, text }); setEditing(false); }} />
     : <p>{note.text}</p>}
     <div><button className="x txt" onClick={() => setEditing(true)} aria-label="Edit note">Edit</button><button className="x" onClick={() => del(note.id)} aria-label="Delete note">×</button></div>
+  </div>;
+}
+
+function TaskModal({ date, error, onError, onClose, onSave }) {
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [taskId] = useState(() => uid());
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape' && !saving) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, saving]);
+  const save = async e => {
+    e.preventDefault();
+    if (saving) return;
+    const data = new FormData(e.currentTarget);
+    const title = String(data.get('title') || '').trim();
+    const startTime = String(data.get('startTime') || ''), endTime = String(data.get('endTime') || '');
+    if (Boolean(startTime) !== Boolean(endTime)) { onError('Choose both a start and end time, or leave both blank.'); return; }
+    if (startTime && endTime && endTime <= startTime) { onError('End time must be later than start time.'); return; }
+    if (!title) return;
+    onError(''); setSaveError(''); setSaving(true);
+    const result = await onSave({ id: taskId, date, t: title, d: false, ...(startTime && endTime ? { startTime, endTime } : {}) });
+    setSaving(false);
+    if (!result) setSaveError('The task could not be saved. Check the connection and try again.');
+  };
+  return <div className="calendar-modal-backdrop" role="presentation">
+    <section className="calendar-modal calendar-task-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-task-title">
+      <div className="calendar-modal-header"><div><span className="calendar-modal-icon">✓</span><div><h2 id="calendar-task-title">Add task</h2><p>Add a task to {dateLabel(date)}.</p></div></div><button className="x" onClick={onClose} aria-label="Close task form" disabled={saving}>×</button></div>
+      <form onSubmit={save}>
+        <label className="calendar-field full"><span>Task <b>*</b></span><input name="title" placeholder="What needs to get done?" autoFocus maxLength={200} required /></label>
+        <label className="calendar-field full"><span>Date <b>*</b></span><input type="date" value={date} readOnly aria-label="Task date" /></label>
+        <div className="calendar-field-row date-time-row">
+          <label className="calendar-field"><span>From</span><input name="startTime" type="time" aria-label="Task start time" /></label>
+          <label className="calendar-field"><span>To</span><input name="endTime" type="time" aria-label="Task end time" /></label>
+        </div>
+        {(error || saveError) && <p className="calendar-modal-error" role="alert">{saveError || error}</p>}
+        <div className="calendar-modal-actions"><button type="button" className="btn" onClick={onClose} disabled={saving}>Cancel</button><button className="btn pri" disabled={saving}>{saving ? 'Saving…' : 'Add task'}</button></div>
+      </form>
+    </section>
   </div>;
 }
 
