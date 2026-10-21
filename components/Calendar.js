@@ -223,6 +223,8 @@ function TaskModal({ date, error, onError, onClose, onSave }) {
     const data = new FormData(e.currentTarget);
     const title = String(data.get('title') || '').trim();
     const startTime = String(data.get('startTime') || ''), endTime = String(data.get('endTime') || '');
+    const startProvided = data.get('startTimeProvided') === '1', endProvided = data.get('endTimeProvided') === '1';
+    if ((startProvided && !startTime) || (endProvided && !endTime)) { onError('Choose the hour, minutes, and AM/PM for each time.'); return; }
     if (Boolean(startTime) !== Boolean(endTime)) { onError('Choose both a start and end time, or leave both blank.'); return; }
     if (startTime && endTime && endTime <= startTime) { onError('End time must be later than start time.'); return; }
     if (!title) return;
@@ -235,16 +237,38 @@ function TaskModal({ date, error, onError, onClose, onSave }) {
     <section className="calendar-modal calendar-task-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-task-title">
       <div className="calendar-modal-header"><div><span className="calendar-modal-icon">✓</span><div><h2 id="calendar-task-title">Add task</h2><p>Add a task to {dateLabel(date)}.</p></div></div><button className="x" onClick={onClose} aria-label="Close task form" disabled={saving}>×</button></div>
       <form onSubmit={save}>
-        <label className="calendar-field full"><span>Task <b>*</b></span><input name="title" placeholder="What needs to get done?" autoFocus maxLength={200} required /></label>
+        <label className="calendar-field full"><span>Task <b>*</b></span><input name="title" type="text" placeholder="What needs to get done?" autoFocus maxLength={200} required /></label>
         <label className="calendar-field full"><span>Date <b>*</b></span><input type="date" value={date} readOnly aria-label="Task date" /></label>
-        <div className="calendar-field-row date-time-row">
-          <label className="calendar-field"><span>From</span><input name="startTime" type="time" aria-label="Task start time" /></label>
-          <label className="calendar-field"><span>To</span><input name="endTime" type="time" aria-label="Task end time" /></label>
+        <div className="calendar-field-row task-time-row">
+          <TimePicker name="startTime" label="From" />
+          <TimePicker name="endTime" label="To" />
         </div>
         {(error || saveError) && <p className="calendar-modal-error" role="alert">{saveError || error}</p>}
         <div className="calendar-modal-actions"><button type="button" className="btn" onClick={onClose} disabled={saving}>Cancel</button><button className="btn pri" disabled={saving}>{saving ? 'Saving…' : 'Add task'}</button></div>
       </form>
     </section>
+  </div>;
+}
+
+function TimePicker({ name, label }) {
+  const [hour, setHour] = useState(''), [minute, setMinute] = useState(''), [meridiem, setMeridiem] = useState('');
+  const provided = Boolean(hour || minute || meridiem);
+  let value = '';
+  if (hour && minute && meridiem) {
+    let hours = Number(hour) % 12;
+    if (meridiem === 'PM') hours += 12;
+    value = `${String(hours).padStart(2, '0')}:${minute}`;
+  }
+  return <div className="calendar-field task-time-picker">
+    <span>{label}</span>
+    <div className="calendar-time-selects">
+      <select aria-label={`${label} hour`} value={hour} onChange={e => setHour(e.target.value)}><option value="">HH</option>{Array.from({ length: 12 }, (_, index) => String(index + 1)).map(item => <option key={item} value={item}>{item.padStart(2, '0')}</option>)}</select>
+      <span aria-hidden="true">:</span>
+      <select aria-label={`${label} minutes`} value={minute} onChange={e => setMinute(e.target.value)}><option value="">MM</option>{Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0')).map(item => <option key={item} value={item}>{item}</option>)}</select>
+      <select aria-label={`${label} AM or PM`} value={meridiem} onChange={e => setMeridiem(e.target.value)}><option value="">AM/PM</option><option>AM</option><option>PM</option></select>
+    </div>
+    <input type="hidden" name={name} value={value} />
+    <input type="hidden" name={`${name}Provided`} value={provided ? '1' : '0'} />
   </div>;
 }
 
