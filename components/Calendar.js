@@ -117,7 +117,7 @@ export default function Calendar({ of, put, del, workspace }) {
       <section className="card calendar-main" aria-label={`${view} calendar`}>
         {view === 'month' && <MonthGrid days={monthDays} today={today} selected={selectedDate} scheduled={allScheduled} notes={of('note')} onSelect={selectMonthDate} />}
         {view === 'week' && <WeekGrid days={weekDays} today={today} selected={selectedDate} scheduled={allScheduled} onSelect={setSelectedDate} />}
-        {view === 'day' && <DayTimeline date={selectedDate} items={selectedItems} onToggle={item => put('task', { ...item, d: !item.d })} onEdit={editItem} onDelete={del} />}
+        {view === 'day' && <DayTimeline date={selectedDate} items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} />}
         <div className="calendar-legend">{TYPES.map(type => <span key={type.id}><i className={`calendar-dot ${type.color}`} />{type.label}</span>)}<span><i className="calendar-dot gray" />Task</span></div>
       </section>
 
@@ -125,7 +125,7 @@ export default function Calendar({ of, put, del, workspace }) {
         <section className="card calendar-agenda">
           <div className="calendar-section-heading"><div><h2>{dateLabel(selectedDate)}</h2><span className="mut">{selectedItems.length} scheduled item{selectedItems.length === 1 ? '' : 's'}</span></div><div className="calendar-agenda-actions"><button className="btn" onClick={() => { setTaskTimeError(''); setTaskDraft({ date: selectedDate }); }}>＋ Add task</button><button className="btn pri" onClick={() => setEventDraft({ date: selectedDate })}>＋ Add event</button></div></div>
           {dayTasks.length > 0 && <div className="calendar-progress"><span className="mut">{done} of {dayTasks.length} tasks complete</span><div className="bar"><b style={{ width: `${done / dayTasks.length * 100}%` }} /></div></div>}
-          <Agenda items={selectedItems} onToggle={item => put('task', { ...item, d: !item.d })} onEdit={editItem} onDelete={del} />
+          <Agenda items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} />
         </section>
 
         <section className="card calendar-notes">
@@ -159,6 +159,9 @@ export default function Calendar({ of, put, del, workspace }) {
   function editItem(item) {
     if (item.recordType === 'task') { setTaskTimeError(''); setTaskDraft(item); }
     else setEventDraft(item);
+  }
+  function toggleDone(item) {
+    put(item.recordType === 'event' ? 'event' : 'task', { ...item, d: !item.d });
   }
 }
 
@@ -201,7 +204,7 @@ function Agenda({ items, onToggle, onEdit, onDelete }) {
     const type = TYPES.find(entry => entry.id === item.category) || TYPES[1];
     const event = item.recordType === 'event';
     return <div className={`calendar-agenda-item ${event ? type.color : 'gray'}`} key={`${item.recordType}-${item.id}`}>
-      {event ? <span className={`calendar-agenda-dot ${type.color}`} /> : <input type="checkbox" checked={!!item.d} onChange={() => onToggle(item)} aria-label={`Mark ${item.title} ${item.d ? 'incomplete' : 'complete'}`} />}
+      {event && item.category !== 'meeting' ? <span className={`calendar-agenda-dot ${type.color}`} /> : <input type="checkbox" checked={!!item.d} onChange={() => onToggle(item)} aria-label={`Mark ${item.title} ${item.d ? 'incomplete' : 'complete'}`} />}
       <div className="calendar-agenda-time">{item.allDay ? 'All day' : item.startTime ? <>{formatTime(item.startTime)}{item.endTime && <small>to {formatTime(item.endTime)}</small>}</> : 'Anytime'}</div>
       <div className="calendar-agenda-copy"><b className={item.d ? 'done' : ''}>{item.title}</b><span>{event ? `${type.label}${item.location ? ` · ${item.location}` : ''}` : 'Task'}{item.description ? ` · ${item.description}` : ''}</span></div>
       {event && <div className="calendar-item-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>×</button></div>}
@@ -323,7 +326,7 @@ function EventModal({ event, date, workspace, onClose, onSave }) {
     const result = await onSave({
       id: event?.id || uid(), title, description: String(data.get('description') || '').trim(),
       date: String(data.get('date') || date), allDay, startTime: allDay ? '' : startTime, endTime: allDay ? '' : endTime,
-      type: String(data.get('type') || 'business'), location: String(data.get('location') || '').trim(), reminders,
+      type: String(data.get('type') || 'business'), location: String(data.get('location') || '').trim(), reminders, d: !!event?.d,
     });
     setSaving(false);
     if (!result) setError('The event could not be saved. Check the connection and try again.');
