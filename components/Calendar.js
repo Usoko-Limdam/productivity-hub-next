@@ -204,7 +204,7 @@ function Agenda({ items, onToggle, onEdit, onDelete }) {
     const type = TYPES.find(entry => entry.id === item.category) || TYPES[1];
     const event = item.recordType === 'event';
     return <div className={`calendar-agenda-item ${event ? type.color : 'gray'}`} key={`${item.recordType}-${item.id}`}>
-      {event && item.category !== 'meeting' ? <span className={`calendar-agenda-dot ${type.color}`} /> : <input type="checkbox" checked={!!item.d} onChange={() => onToggle(item)} aria-label={`Mark ${item.title} ${item.d ? 'incomplete' : 'complete'}`} />}
+      <input type="checkbox" checked={!!item.d} onChange={() => onToggle(item)} aria-label={`Mark ${event ? 'event' : 'task'} ${item.title} ${item.d ? 'incomplete' : 'complete'}`} />
       <div className="calendar-agenda-time">{item.allDay ? 'All day' : item.startTime ? <>{formatTime(item.startTime)}{item.endTime && <small>to {formatTime(item.endTime)}</small>}</> : 'Anytime'}</div>
       <div className="calendar-agenda-copy"><b className={item.d ? 'done' : ''}>{item.title}</b><span>{event ? `${type.label}${item.location ? ` · ${item.location}` : ''}` : 'Task'}{item.description ? ` · ${item.description}` : ''}</span></div>
       {event && <div className="calendar-item-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>×</button></div>}
