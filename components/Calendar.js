@@ -207,7 +207,7 @@ function Agenda({ items, onToggle, onEdit, onDelete }) {
       <input type="checkbox" checked={!!item.d} onChange={() => onToggle(item)} aria-label={`Mark ${event ? 'event' : 'task'} ${item.title} ${item.d ? 'incomplete' : 'complete'}`} />
       <div className="calendar-agenda-time">{item.allDay ? 'All day' : item.startTime ? <>{formatTime(item.startTime)}{item.endTime && <small>to {formatTime(item.endTime)}</small>}</> : 'Anytime'}</div>
       <div className="calendar-agenda-copy"><b className={item.d ? 'done' : ''}>{item.title}</b><span>{event ? `${type.label}${item.location ? ` · ${item.location}` : ''}` : 'Task'}{item.description ? ` · ${item.description}` : ''}</span></div>
-      {event && <div className="calendar-item-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>×</button></div>}
+      {event && <div className="calendar-item-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x txt" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>Delete</button></div>}
       {!event && <div className="calendar-item-actions calendar-task-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x txt" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>Delete</button></div>}
     </div>;
   })}</div>;
