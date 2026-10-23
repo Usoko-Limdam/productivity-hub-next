@@ -18,7 +18,7 @@ const TABS = {
   work: ['Work', 'Tasks, notes, calendar and goals.'],
   clients: ['Clients', 'Client engagements and sales.'],
   more: ['More', 'Settings and other modules.'],
-  diary: ['Diary / Notes', 'Capture ideas, drafts, and checklists.'],
+  diary: ['Diary / Notes', 'Capture ideas, drafts, and checklists'],
   cal: ['Calendar', 'Plan your day, one task at a time.'],
   goals: ['Goals', 'Set weekly, monthly, and annual targets and watch them fill up.'],
   proj: ['Engagements', 'Projects and ongoing services for your clients.'],
@@ -222,7 +222,7 @@ export default function App({ initial, workspace, workspaces }) {
           {tab === 'work' && <WorkHub go={go} />}
           {tab === 'clients' && <ClientsHub go={go} />}
           {tab === 'more' && <MoreHub go={go} />}
-          {tab === 'diary' && <Diary {...p} />}
+          {tab === 'diary' && <Diary {...p} workspace={workspace} />}
           {tab === 'cal' && <Calendar {...p} workspace={workspace} />}
           {tab === 'goals' && <Goals {...p} />}
           {tab === 'proj' && <Projects {...p} />}
