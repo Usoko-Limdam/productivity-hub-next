@@ -214,7 +214,7 @@ function Agenda({ items, onToggle, onEdit, onDelete, onReschedule }) {
   return <div className="calendar-agenda-list">{items.map(item => {
     const type = TYPES.find(entry => entry.id === item.category) || TYPES[1];
     const event = item.recordType === 'event';
-    return <div className={`calendar-agenda-item ${event ? type.color : 'gray'}`} key={`${item.recordType}-${item.id}`}>
+    return <div className={`calendar-agenda-item ${event ? type.color : 'gray task'}`} key={`${item.recordType}-${item.id}`}>
       <input type="checkbox" checked={!!item.d} onChange={() => onToggle(item)} aria-label={`Mark ${event ? 'event' : 'task'} ${item.title} ${item.d ? 'incomplete' : 'complete'}`} />
       <div className="calendar-agenda-time">{item.allDay ? 'All day' : item.startTime ? <>{formatTime(item.startTime)}{item.endTime && <small>to {formatTime(item.endTime)}</small>}</> : 'Anytime'}</div>
       <div className="calendar-agenda-copy"><b className={item.d ? 'done' : ''}>{item.title}</b><span>{event ? `${type.label}${item.location ? ` · ${item.location}` : ''}` : 'Task'}{item.description ? ` · ${item.description}` : ''}</span></div>
