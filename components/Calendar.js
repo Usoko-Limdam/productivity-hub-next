@@ -37,6 +37,7 @@ export default function Calendar({ of, put, del, workspace }) {
   const [taskTimeError, setTaskTimeError] = useState('');
   const [eventDraft, setEventDraft] = useState(null);
   const [taskDraft, setTaskDraft] = useState(null);
+  const [rescheduleDraft, setRescheduleDraft] = useState(null);
   const [quickNote, setQuickNote] = useState('');
   const tasks = of('task');
   const events = of('event');
@@ -117,7 +118,7 @@ export default function Calendar({ of, put, del, workspace }) {
       <section className="card calendar-main" aria-label={`${view} calendar`}>
         {view === 'month' && <MonthGrid days={monthDays} today={today} selected={selectedDate} scheduled={allScheduled} notes={of('note')} onSelect={selectMonthDate} />}
         {view === 'week' && <WeekGrid days={weekDays} today={today} selected={selectedDate} scheduled={allScheduled} onSelect={setSelectedDate} />}
-        {view === 'day' && <DayTimeline date={selectedDate} items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} />}
+        {view === 'day' && <DayTimeline date={selectedDate} items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} onReschedule={item => setRescheduleDraft(item)} />}
         <div className="calendar-legend">{TYPES.map(type => <span key={type.id}><i className={`calendar-dot ${type.color}`} />{type.label}</span>)}<span><i className="calendar-dot gray" />Task</span></div>
       </section>
 
@@ -125,7 +126,7 @@ export default function Calendar({ of, put, del, workspace }) {
         <section className="card calendar-agenda">
           <div className="calendar-section-heading"><div><h2>{dateLabel(selectedDate)}</h2><span className="mut">{selectedItems.length} scheduled item{selectedItems.length === 1 ? '' : 's'}</span></div><div className="calendar-agenda-actions"><button className="btn" onClick={() => { setTaskTimeError(''); setTaskDraft({ date: selectedDate }); }}>＋ Add task</button><button className="btn pri" onClick={() => setEventDraft({ date: selectedDate })}>＋ Add event</button></div></div>
           {dayTasks.length > 0 && <div className="calendar-progress"><span className="mut">{done} of {dayTasks.length} tasks complete</span><div className="bar"><b style={{ width: `${done / dayTasks.length * 100}%` }} /></div></div>}
-          <Agenda items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} />
+          <Agenda items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} onReschedule={item => setRescheduleDraft(item)} />
         </section>
 
         <section className="card calendar-notes">
@@ -151,6 +152,16 @@ export default function Calendar({ of, put, del, workspace }) {
           const nextDate = new Date(`${task.date}T00:00`);
           setSelectedDate(task.date); setMonth(nextDate.getMonth()); setYear(nextDate.getFullYear());
         }
+      }
+      return saved;
+    }} />}
+    {rescheduleDraft && <RescheduleModal task={rescheduleDraft} onClose={() => setRescheduleDraft(null)} onSave={async date => {
+      const { recordType, title, category, ...task } = rescheduleDraft;
+      const saved = await put('task', { ...task, date });
+      if (saved) {
+        setRescheduleDraft(null);
+        const nextDate = new Date(`${date}T00:00`);
+        setSelectedDate(date); setMonth(nextDate.getMonth()); setYear(nextDate.getFullYear());
       }
       return saved;
     }} />}
@@ -194,11 +205,11 @@ function WeekGrid({ days, today, selected, scheduled, onSelect }) {
   })}</div>;
 }
 
-function DayTimeline({ date, items, onToggle, onEdit, onDelete }) {
-  return <div className="calendar-day-timeline"><h2>{dateLabel(date)}</h2>{items.length ? <Agenda items={items} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} /> : <Empty>Nothing scheduled for this day.</Empty>}</div>;
+function DayTimeline({ date, items, onToggle, onEdit, onDelete, onReschedule }) {
+  return <div className="calendar-day-timeline"><h2>{dateLabel(date)}</h2>{items.length ? <Agenda items={items} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onReschedule={onReschedule} /> : <Empty>Nothing scheduled for this day.</Empty>}</div>;
 }
 
-function Agenda({ items, onToggle, onEdit, onDelete }) {
+function Agenda({ items, onToggle, onEdit, onDelete, onReschedule }) {
   if (!items.length) return <div className="calendar-agenda-empty"><span>✓</span><p>Nothing planned for this day.</p></div>;
   return <div className="calendar-agenda-list">{items.map(item => {
     const type = TYPES.find(entry => entry.id === item.category) || TYPES[1];
@@ -208,7 +219,7 @@ function Agenda({ items, onToggle, onEdit, onDelete }) {
       <div className="calendar-agenda-time">{item.allDay ? 'All day' : item.startTime ? <>{formatTime(item.startTime)}{item.endTime && <small>to {formatTime(item.endTime)}</small>}</> : 'Anytime'}</div>
       <div className="calendar-agenda-copy"><b className={item.d ? 'done' : ''}>{item.title}</b><span>{event ? `${type.label}${item.location ? ` · ${item.location}` : ''}` : 'Task'}{item.description ? ` · ${item.description}` : ''}</span></div>
       {event && <div className="calendar-item-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x txt" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>Delete</button></div>}
-      {!event && <div className="calendar-item-actions calendar-task-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x txt" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>Delete</button></div>}
+      {!event && <div className="calendar-item-actions calendar-task-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x txt" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>Delete</button>{!item.d && <button className="x txt" onClick={() => onReschedule(item)} aria-label={`Reschedule ${item.title}`}>Reschedule</button>}</div>}
     </div>;
   })}</div>;
 }
@@ -259,6 +270,36 @@ function TaskModal({ task, date, error, onError, onClose, onSave }) {
         </div>
         {(error || saveError) && <p className="calendar-modal-error" role="alert">{saveError || error}</p>}
         <div className="calendar-modal-actions"><button type="button" className="btn" onClick={onClose} disabled={saving}>Cancel</button><button className="btn pri" disabled={saving}>{saving ? 'Saving…' : task ? 'Save changes' : 'Add task'}</button></div>
+      </form>
+    </section>
+  </div>;
+}
+
+function RescheduleModal({ task, onClose, onSave }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape' && !saving) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, saving]);
+  const save = async e => {
+    e.preventDefault();
+    if (saving) return;
+    const date = String(new FormData(e.currentTarget).get('date') || '');
+    if (!date) { setError('Choose a date for this task.'); return; }
+    setError(''); setSaving(true);
+    const result = await onSave(date);
+    setSaving(false);
+    if (!result) setError('The task could not be rescheduled. Check the connection and try again.');
+  };
+  return <div className="calendar-modal-backdrop" role="presentation">
+    <section className="calendar-modal reschedule-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-reschedule-title">
+      <div className="calendar-modal-header"><div><span className="calendar-modal-icon">↗</span><div><h2 id="calendar-reschedule-title">Reschedule task</h2><p>Choose a new date for “{task.t}”.</p></div></div><button className="x" onClick={onClose} aria-label="Close reschedule form" disabled={saving}>×</button></div>
+      <form onSubmit={save}>
+        <label className="calendar-field"><span>New date <b>*</b></span><input type="date" name="date" defaultValue={task.date} required autoFocus /></label>
+        {error && <p className="calendar-modal-error" role="alert">{error}</p>}
+        <div className="calendar-modal-actions"><button type="button" className="btn" onClick={onClose} disabled={saving}>Cancel</button><button className="btn pri" disabled={saving}>{saving ? 'Rescheduling…' : 'Reschedule'}</button></div>
       </form>
     </section>
   </div>;
