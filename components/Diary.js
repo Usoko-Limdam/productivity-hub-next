@@ -36,6 +36,7 @@ export default function Diary({ of, put, del, workspace }) {
   const timer = useRef(null);
   const bodyRef = useRef(null);
   const menuRef = useRef(null);
+  const initialSelectionDone = useRef(false);
 
   const visibleNotes = useMemo(() => {
     const search = query.trim().toLocaleLowerCase();
@@ -58,8 +59,17 @@ export default function Diary({ of, put, del, workspace }) {
   }, [notes, tab, query, sort, filter]);
 
   useEffect(() => {
+    if (!initialSelectionDone.current) {
+      if (!visibleNotes.length) return;
+      const first = visibleNotes[0];
+      initialSelectionDone.current = true;
+      setSelectedId(first.id); setDraft(first); setDirty(false); setTagDraft((first.tags || []).join(', '));
+      return;
+    }
     // Keep an empty, newly-created draft selected until it has content and is persisted.
     if (draft && !notes.some(note => note.id === draft.id)) return;
+    // A cleared selection is intentional (for example, after Close note); leave the editor empty.
+    if (!selectedId) return;
     if (!visibleNotes.length) {
       if (selectedId && !notes.some(note => note.id === selectedId)) {
         setSelectedId(null); setDraft(null); setDirty(false);
@@ -111,12 +121,14 @@ export default function Diary({ of, put, del, workspace }) {
   };
   const create = type => {
     flush();
+    initialSelectionDone.current = true;
     const note = fresh(type);
     setSelectedId(note.id); setDraft(note); setDirty(false); setNewItem(''); setTagDraft(''); setTab(type === 'checklist' ? 'checklists' : 'mine');
   };
   const select = note => {
     if (note.id === selectedId) return;
     flush();
+    initialSelectionDone.current = true;
     setSelectedId(note.id); setDraft(note); setDirty(false); setNewItem(''); setTagDraft((note.tags || []).join(', ')); setSaveError('');
   };
   const remove = note => {
@@ -153,6 +165,7 @@ export default function Diary({ of, put, del, workspace }) {
     save({ ...draft, tags });
   };
   const closeEditor = () => {
+    initialSelectionDone.current = true;
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     if (draft && dirty && hasContent(draft)) {
