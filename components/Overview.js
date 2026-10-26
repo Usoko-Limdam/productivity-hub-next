@@ -65,7 +65,7 @@ export default function Overview({ of, put, money, go }) {
             <div className="row" key={t.id}>
               <input type="checkbox" checked={t.d} onChange={() => {
                 const d = !t.d;
-                put('task', { ...t, d });
+                put('task', { ...t, d, completedAt: d ? new Date().toISOString() : null });
                 if (t.projectId && t.milestoneId) {
                   const project = of('project').find(p => p.id === t.projectId);
                   if (project) put('project', { ...project, ms: (project.ms || []).map(m => m.id === t.milestoneId ? { ...m, d } : m) });

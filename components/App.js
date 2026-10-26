@@ -84,7 +84,7 @@ export default function App({ initial, workspace, workspaces }) {
     window.addEventListener('beforeunload', onLeave);
     return () => { window.removeEventListener('popstate', onPop); window.removeEventListener('beforeunload', onLeave); };
   }, [workspace?.slug]);
-  if (!ready) return null; // avoids server/browser date mismatches
+  if (!ready || loadedWorkspace.current !== workspace?.id) return null; // avoid server/browser date mismatches and stale records during workspace switches
 
   const report = saved => setSync({ pending: pending.current, failed: failed.current.size, expired: expired.current, saved });
   const run = op => {

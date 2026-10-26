@@ -39,8 +39,13 @@ export default function Calendar({ of, put, del, workspace }) {
   const [taskDraft, setTaskDraft] = useState(null);
   const [rescheduleDraft, setRescheduleDraft] = useState(null);
   const [quickNote, setQuickNote] = useState('');
+  const [filters, setFilters] = useState({ type: 'all', status: 'all', priority: 'all', project: 'all' });
+  const [filterMessage, setFilterMessage] = useState('');
+  const workspaceId = workspace?.id;
+  useEffect(() => setFilters({ type: 'all', status: 'all', priority: 'all', project: 'all' }), [workspaceId]);
   const tasks = of('task');
   const events = of('event');
+  const projects = of('project');
   const notes = of('note').filter(note => note.date === selectedDate);
   const monthStart = new Date(year, month, 1);
   const monthEnd = new Date(year, month + 1, 0);
@@ -56,18 +61,32 @@ export default function Calendar({ of, put, del, workspace }) {
   }, [selectedDate]);
 
   const allScheduled = useMemo(() => [
-    ...tasks.map(task => ({ ...task, recordType: 'task', title: task.t || 'Untitled task', category: 'business' })),
+    ...tasks.map(task => ({ ...task, recordType: 'task', title: task.t || 'Untitled task', projectName: task.projectName || projects.find(project => project.id === task.projectId)?.name || '', category: 'business' })),
     ...events.map(event => ({ ...event, recordType: 'event', title: event.title || 'Untitled event', category: event.type || 'business' })),
-  ], [tasks, events]);
-  const selectedItems = sorted(allScheduled.filter(item => item.date === selectedDate));
+  ], [tasks, events, projects]);
+  const filteredScheduled = allScheduled.filter(item => {
+    if (filters.type !== 'all' && (filters.type === 'task' ? item.recordType !== 'task' : item.recordType !== 'event' || item.category !== filters.type)) return false;
+    if (item.recordType === 'task') {
+      if (filters.status === 'open' && item.d || filters.status === 'completed' && !item.d) return false;
+      if (filters.priority !== 'all' && (item.priority || 'normal') !== filters.priority) return false;
+      if (filters.project !== 'all' && item.projectId !== filters.project) return false;
+    } else if (filters.status !== 'all' || filters.priority !== 'all' || filters.project !== 'all') return false;
+    return true;
+  });
+  const selectedItems = sorted(filteredScheduled.filter(item => item.date === selectedDate)).sort((a, b) => Number(b.recordType === 'task' && b.focusDate === selectedDate) - Number(a.recordType === 'task' && a.focusDate === selectedDate));
   const dayTasks = selectedItems.filter(item => item.recordType === 'task');
   const done = dayTasks.filter(task => task.d).length;
-  const todayTasks = tasks.filter(task => task.date === today);
-  const totalCompletedTasks = tasks.filter(task => task.d).length;
-  const totalOpenTasks = tasks.length - totalCompletedTasks;
-  const completionRate = tasks.length ? Math.round(totalCompletedTasks / tasks.length * 100) : 0;
-  const overdue = tasks.filter(task => task.date < today && !task.d).length;
-  const meetings = events.filter(event => event.type === 'meeting' && event.date >= today).sort((a, b) => `${a.date}${a.startTime || '00:00'}`.localeCompare(`${b.date}${b.startTime || '00:00'}`));
+  const scopedTasks = filteredScheduled.filter(item => item.recordType === 'task');
+  const todayTasks = scopedTasks.filter(task => task.date === today && !task.d);
+  const completedToday = scopedTasks.filter(task => task.d && task.completedAt && ymd(new Date(task.completedAt)) === today).length;
+  const totalCompletedTasks = scopedTasks.filter(task => task.d).length;
+  const totalOpenTasks = scopedTasks.length - totalCompletedTasks;
+  const completionRate = scopedTasks.length ? Math.round(totalCompletedTasks / scopedTasks.length * 100) : 0;
+  const nowTime = `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`;
+  const overdue = scopedTasks.filter(task => !task.d && /^\d{4}-\d{2}-\d{2}$/.test(task.date || '') && (task.date < today || task.date === today && task.endTime && task.endTime <= nowTime)).length;
+  const meetings = filteredScheduled.filter(event => event.recordType === 'event' && event.category === 'meeting' && !event.cancelled && !event.canceled && event.status !== 'cancelled' && event.date <= dateAdd(today, 30) && (event.date > today || event.date === today && (event.allDay || (event.endTime || event.startTime || '') > nowTime))).sort((a, b) => `${a.date}${a.startTime || '00:00'}`.localeCompare(`${b.date}${b.startTime || '00:00'}`));
+  const dailyFocusCount = tasks.filter(task => task.focusDate === selectedDate).length;
+  const projectOptions = [...new Map(tasks.filter(task => task.projectId).map(task => [task.projectId, task.projectName || projects.find(project => project.id === task.projectId)?.name || task.projectId])).entries()];
 
   const movePeriod = direction => {
     if (view === 'day') { const date = dateAdd(selectedDate, direction); setSelectedDate(date); setMonth(new Date(`${date}T00:00`).getMonth()); setYear(new Date(`${date}T00:00`).getFullYear()); return; }
@@ -99,11 +118,19 @@ export default function Calendar({ of, put, del, workspace }) {
 
   return <div className="calendar-page">
     <div className="calendar-summary">
-      <Summary icon="▦" value={todayTasks.length} label="Today's tasks" detail={`${todayTasks.filter(task => !task.d).length} remaining`} tone="purple" />
-      <Summary icon="✓" value={todayTasks.filter(task => task.d).length} label="Completed today" detail={`${todayTasks.length ? Math.round(todayTasks.filter(task => task.d).length / todayTasks.length * 100) : 0}% of today's tasks`} tone="green" />
+      <Summary icon="▦" value={todayTasks.length} label="Today's tasks" detail={`${todayTasks.length} remaining`} tone="purple" />
+      <Summary icon="✓" value={completedToday} label="Completed today" detail={`${completedToday + todayTasks.length ? Math.round(completedToday / (completedToday + todayTasks.length) * 100) : 0}% of today's tasks`} tone="green" />
       <Summary icon="✓" value={totalCompletedTasks} label="Total completed tasks" detail={`${completionRate}% complete · ${totalCompletedTasks} done / ${totalOpenTasks} open`} tone="green" />
       <Summary icon="◷" value={overdue} label="Overdue tasks" detail={overdue ? 'Needs attention' : 'All caught up'} tone="red" />
       <Summary icon="▣" value={meetings.length} label="Upcoming meetings" detail={meetings[0] ? `Next: ${meetings[0].date === today ? formatTime(meetings[0].startTime) || 'Today' : fmtD(new Date(`${meetings[0].date}T00:00`), { month: 'short', day: 'numeric' })}` : 'None scheduled'} tone="blue" />
+    </div>
+
+    <div className="calendar-filters" aria-label="Calendar filters">
+      <label>Type <select aria-label="Filter calendar by type" value={filters.type} onChange={e => setFilters(current => ({ ...current, type: e.target.value }))}><option value="all">All items</option><option value="task">Tasks</option>{TYPES.map(type => <option key={type.id} value={type.id}>{type.label}s</option>)}</select></label>
+      <label>Status <select aria-label="Filter tasks by status" value={filters.status} onChange={e => setFilters(current => ({ ...current, status: e.target.value }))}><option value="all">All statuses</option><option value="open">Open</option><option value="completed">Completed</option></select></label>
+      <label>Priority <select aria-label="Filter tasks by priority" value={filters.priority} onChange={e => setFilters(current => ({ ...current, priority: e.target.value }))}><option value="all">All priorities</option>{['critical','high','normal','low'].map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}</select></label>
+      {projectOptions.length > 0 && <label>Project <select aria-label="Filter tasks by project" value={filters.project} onChange={e => setFilters(current => ({ ...current, project: e.target.value }))}><option value="all">All projects</option>{projectOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>}
+      {Object.values(filters).some(value => value !== 'all') && <button className="btn sm" onClick={() => setFilters({ type: 'all', status: 'all', priority: 'all', project: 'all' })}>Clear filters</button>}
     </div>
 
     <div className="calendar-toolbar">
@@ -120,9 +147,9 @@ export default function Calendar({ of, put, del, workspace }) {
 
     <div className="calendar-layout">
       <section className="card calendar-main" aria-label={`${view} calendar`}>
-        {view === 'month' && <MonthGrid days={monthDays} today={today} selected={selectedDate} scheduled={allScheduled} notes={of('note')} onSelect={selectMonthDate} />}
-        {view === 'week' && <WeekGrid days={weekDays} today={today} selected={selectedDate} scheduled={allScheduled} onSelect={setSelectedDate} />}
-        {view === 'day' && <DayTimeline date={selectedDate} items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} onReschedule={item => setRescheduleDraft(item)} />}
+        {view === 'month' && <MonthGrid days={monthDays} today={today} selected={selectedDate} scheduled={filteredScheduled} notes={of('note')} onSelect={selectMonthDate} />}
+        {view === 'week' && <WeekGrid days={weekDays} today={today} selected={selectedDate} scheduled={filteredScheduled} onSelect={setSelectedDate} />}
+        {view === 'day' && <DayTimeline date={selectedDate} items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} onReschedule={item => setRescheduleDraft(item)} onToggleFocus={toggleFocus} dailyFocusCount={dailyFocusCount} />}
         <div className="calendar-legend">{TYPES.map(type => <span key={type.id}><i className={`calendar-dot ${type.color}`} />{type.label}</span>)}<span><i className="calendar-dot gray" />Task</span></div>
       </section>
 
@@ -130,7 +157,8 @@ export default function Calendar({ of, put, del, workspace }) {
         <section className="card calendar-agenda">
           <div className="calendar-section-heading"><div><h2>{dateLabel(selectedDate)}</h2><span className="mut">{selectedItems.length} scheduled item{selectedItems.length === 1 ? '' : 's'}</span></div><div className="calendar-agenda-actions"><button className="btn" onClick={() => { setTaskTimeError(''); setTaskDraft({ date: selectedDate }); }}>＋ Add task</button><button className="btn pri" onClick={() => setEventDraft({ date: selectedDate })}>＋ Add event</button></div></div>
           {dayTasks.length > 0 && <div className="calendar-progress"><span className="mut">{done} of {dayTasks.length} tasks complete</span><div className="bar"><b style={{ width: `${done / dayTasks.length * 100}%` }} /></div></div>}
-          <Agenda items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} onReschedule={item => setRescheduleDraft(item)} />
+          <Agenda items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} onReschedule={item => setRescheduleDraft(item)} onToggleFocus={toggleFocus} dailyFocusCount={dailyFocusCount} />
+          {filterMessage && <p className="calendar-modal-error" role="status">{filterMessage}</p>}
         </section>
 
         <section className="card calendar-notes">
@@ -161,7 +189,7 @@ export default function Calendar({ of, put, del, workspace }) {
     }} />}
     {rescheduleDraft && <RescheduleModal task={rescheduleDraft} onClose={() => setRescheduleDraft(null)} onSave={async date => {
       const { recordType, title, category, ...task } = rescheduleDraft;
-      const saved = await put('task', { ...task, date });
+      const saved = await put('task', { ...task, date, ...(task.focusDate === task.date ? { focusDate: date } : {}) });
       if (saved) {
         setRescheduleDraft(null);
         const nextDate = new Date(`${date}T00:00`);
@@ -176,12 +204,18 @@ export default function Calendar({ of, put, del, workspace }) {
     else setEventDraft(item);
   }
   function toggleDone(item) {
-    const updated = { ...item, d: !item.d };
+    const nextDone = !item.d;
+    const updated = { ...item, d: nextDone, ...(item.recordType === 'task' ? { completedAt: nextDone ? new Date().toISOString() : null } : {}) };
     put(item.recordType === 'event' ? 'event' : 'task', updated);
     if (item.recordType === 'task' && item.projectId && item.milestoneId) {
       const project = of('project').find(p => p.id === item.projectId);
       if (project) put('project', { ...project, ms: (project.ms || []).map(m => m.id === item.milestoneId ? { ...m, d: updated.d } : m) });
     }
+  }
+  function toggleFocus(item) {
+    if (item.focusDate === selectedDate) { setFilterMessage(''); put('task', { ...item, focusDate: null }); return; }
+    if (dailyFocusCount >= 3) { setFilterMessage('Daily Focus is limited to three tasks for each date.'); return; }
+    setFilterMessage(''); put('task', { ...item, focusDate: selectedDate });
   }
 }
 
@@ -214,21 +248,27 @@ function WeekGrid({ days, today, selected, scheduled, onSelect }) {
   })}</div>;
 }
 
-function DayTimeline({ date, items, onToggle, onEdit, onDelete, onReschedule }) {
-  return <div className="calendar-day-timeline"><h2>{dateLabel(date)}</h2>{items.length ? <Agenda items={items} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onReschedule={onReschedule} /> : <Empty>Nothing scheduled for this day.</Empty>}</div>;
+function DayTimeline({ date, items, onToggle, onEdit, onDelete, onReschedule, onToggleFocus, dailyFocusCount }) {
+  return <div className="calendar-day-timeline"><h2>{dateLabel(date)}</h2>{items.length ? <Agenda items={items} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onReschedule={onReschedule} onToggleFocus={onToggleFocus} dailyFocusCount={dailyFocusCount} /> : <Empty>Nothing scheduled for this day.</Empty>}</div>;
 }
 
-function Agenda({ items, onToggle, onEdit, onDelete, onReschedule }) {
+function Agenda({ items, onToggle, onEdit, onDelete, onReschedule, onToggleFocus, dailyFocusCount = 0 }) {
   if (!items.length) return <div className="calendar-agenda-empty"><span>✓</span><p>Nothing planned for this day.</p></div>;
   return <div className="calendar-agenda-list">{items.map(item => {
     const type = TYPES.find(entry => entry.id === item.category) || TYPES[1];
     const event = item.recordType === 'event';
-    return <div className={`calendar-agenda-item ${event ? type.color : 'gray task'}`} key={`${item.recordType}-${item.id}`}>
+    const focused = !event && item.focusDate === item.date;
+    const today = ymd(new Date()), now = new Date(), nowTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const overdue = !event && !item.d && item.date && (item.date < today || item.date === today && item.endTime && item.endTime <= nowTime);
+    const urgency = item.d ? 'Completed' : overdue ? 'Overdue' : item.date === today ? 'Due today' : item.date ? 'Upcoming' : 'No due date';
+    const priority = ['critical', 'high', 'normal', 'low'].includes(item.priority) ? item.priority : 'normal';
+    const project = item.projectName || item.clientName || item.engagementName || '';
+    return <div className={`calendar-agenda-item ${event ? type.color : 'gray task'}${focused ? ' focus' : ''}${overdue ? ' overdue' : ''}`} key={`${item.recordType}-${item.id}`}>
       <input type="checkbox" checked={!!item.d} onChange={() => onToggle(item)} aria-label={`Mark ${event ? 'event' : 'task'} ${item.title} ${item.d ? 'incomplete' : 'complete'}`} />
       <div className="calendar-agenda-time">{item.allDay ? 'All day' : item.startTime ? <>{formatTime(item.startTime)}{item.endTime && <small>to {formatTime(item.endTime)}</small>}</> : 'Anytime'}</div>
-      <div className="calendar-agenda-copy"><b className={item.d ? 'done' : ''}>{item.title}</b><span>{event ? `${type.label}${item.location ? ` · ${item.location}` : ''}` : 'Task'}{item.description ? ` · ${item.description}` : ''}</span></div>
+      <div className="calendar-agenda-copy"><div className="calendar-agenda-title"><b className={item.d ? 'done' : ''}>{item.title}</b>{!event && <span className={`calendar-priority ${priority}`} title={`${priority[0].toUpperCase() + priority.slice(1)} priority`}>{priority[0].toUpperCase() + priority.slice(1)}</span>}</div><span>{event ? `${type.label}${item.location ? ` · ${item.location}` : ''}` : `${urgency}${project ? ` · ${project}` : ''}`}{item.description ? ` · ${item.description}` : ''}</span></div>
       {event && <div className="calendar-item-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x txt" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>Delete</button></div>}
-      {!event && <div className="calendar-item-actions calendar-task-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x txt" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>Delete</button>{!item.d && <button className="x txt" onClick={() => onReschedule(item)} aria-label={`Reschedule ${item.title}`}>Reschedule</button>}</div>}
+      {!event && <div className="calendar-item-actions calendar-task-actions"><button className="x txt" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`}>Edit</button><button className="x txt" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.title}`}>Delete</button>{!item.d && <button className="x txt" onClick={() => onReschedule(item)} aria-label={`Reschedule ${item.title}`}>Reschedule</button>}<button className="x txt" onClick={() => onToggleFocus(item)} disabled={!focused && dailyFocusCount >= 3} aria-pressed={focused} aria-label={focused ? `Remove ${item.title} from Daily Focus` : `Add ${item.title} to Daily Focus`} title={focused ? 'Remove from Daily Focus' : dailyFocusCount >= 3 ? 'Daily Focus is full' : 'Add to Daily Focus'}>{focused ? '★' : '☆'}</button></div>}
     </div>;
   })}</div>;
 }
@@ -263,7 +303,7 @@ function TaskModal({ task, date, error, onError, onClose, onSave }) {
     if (startTime && endTime && endTime <= startTime) { onError('End time must be later than start time.'); return; }
     if (!title) return;
     onError(''); setSaveError(''); setSaving(true);
-    const result = await onSave({ id: task?.id || taskId, date: String(data.get('date') || date), t: title, d: task?.d || false, ...(startTime && endTime ? { startTime, endTime } : {}) });
+    const result = await onSave({ ...task, id: task?.id || taskId, date: String(data.get('date') || date), t: title, d: task?.d || false, priority: String(data.get('priority') || task?.priority || 'normal'), ...(task?.focusDate ? { focusDate: task.focusDate === task.date ? String(data.get('date') || date) : task.focusDate } : {}), ...(startTime && endTime ? { startTime, endTime } : { startTime: '', endTime: '' }) });
     setSaving(false);
     if (!result) setSaveError('The task could not be saved. Check the connection and try again.');
   };
@@ -273,6 +313,7 @@ function TaskModal({ task, date, error, onError, onClose, onSave }) {
       <form onSubmit={save}>
         <label className="calendar-field full"><span>Task <b>*</b></span><input name="title" type="text" defaultValue={task?.t || ''} placeholder="What needs to get done?" autoFocus maxLength={200} required /></label>
         <label className="calendar-field full"><span>Date <b>*</b></span><input name="date" type="date" defaultValue={task?.date || date} required aria-label="Task date" /></label>
+        <label className="calendar-field full"><span>Priority</span><select name="priority" defaultValue={task?.priority || 'normal'} aria-label="Task priority"><option value="critical">Critical</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label>
         <div className="calendar-field-row task-time-row">
           <TimePicker name="startTime" label="From" value={task?.startTime || ''} />
           <TimePicker name="endTime" label="To" value={task?.endTime || ''} />

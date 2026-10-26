@@ -183,7 +183,7 @@ function Card({ q, paid, open, toggle, put, del, money, today, of }) {
                     const d = !m.d;
                     upd({ ms: ms.map(x => x.id === m.id ? { ...x, d } : x) });
                     const task = m.taskId && of('task').find(t => t.id === m.taskId);
-                    if (task) put('task', { ...task, d });
+                    if (task) put('task', { ...task, d, completedAt: d ? new Date().toISOString() : null });
                   }} />
                   <div className="g"><span className={m.d ? 'done' : ''}>{m.t}</span>{m.due && <span className={'mut ' + (!m.d && m.due < today ? 'neg' : '')}>Due {short(m.due)}</span>}</div>
                   <div className="milestone-actions">
