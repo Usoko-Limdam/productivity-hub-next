@@ -74,6 +74,7 @@ export default function Calendar({ of, put, del, workspace }) {
     return true;
   });
   const selectedItems = sorted(filteredScheduled.filter(item => item.date === selectedDate)).sort((a, b) => Number(b.recordType === 'task' && b.focusDate === selectedDate) - Number(a.recordType === 'task' && a.focusDate === selectedDate));
+  const unscheduledTasks = sorted(filteredScheduled.filter(item => item.recordType === 'task' && !item.date));
   const dayTasks = selectedItems.filter(item => item.recordType === 'task');
   const done = dayTasks.filter(task => task.d).length;
   const scopedTasks = filteredScheduled.filter(item => item.recordType === 'task');
@@ -157,9 +158,11 @@ export default function Calendar({ of, put, del, workspace }) {
         <section className="card calendar-agenda">
           <div className="calendar-section-heading"><div><h2>{dateLabel(selectedDate)}</h2><span className="mut">{selectedItems.length} scheduled item{selectedItems.length === 1 ? '' : 's'}</span></div><div className="calendar-agenda-actions"><button className="btn" onClick={() => { setTaskTimeError(''); setTaskDraft({ date: selectedDate }); }}>＋ Add task</button><button className="btn pri" onClick={() => setEventDraft({ date: selectedDate })}>＋ Add event</button></div></div>
           {dayTasks.length > 0 && <div className="calendar-progress"><span className="mut">{done} of {dayTasks.length} tasks complete</span><div className="bar"><b style={{ width: `${done / dayTasks.length * 100}%` }} /></div></div>}
-          <Agenda items={selectedItems} onToggle={toggleDone} onEdit={editItem} onDelete={del} onReschedule={item => setRescheduleDraft(item)} onToggleFocus={toggleFocus} dailyFocusCount={dailyFocusCount} />
+          <Agenda items={selectedItems} focusDate={selectedDate} onToggle={toggleDone} onEdit={editItem} onDelete={del} onReschedule={item => setRescheduleDraft(item)} onToggleFocus={toggleFocus} dailyFocusCount={dailyFocusCount} />
           {filterMessage && <p className="calendar-modal-error" role="status">{filterMessage}</p>}
         </section>
+
+        {unscheduledTasks.length > 0 && <section className="card calendar-unscheduled"><div className="calendar-section-heading"><div><h2>Unscheduled tasks</h2><span className="mut">Tasks without a due date</span></div><span className="calendar-unscheduled-count">{unscheduledTasks.length}</span></div><Agenda items={unscheduledTasks} focusDate={selectedDate} onToggle={toggleDone} onEdit={editItem} onDelete={del} onReschedule={item => setRescheduleDraft(item)} onToggleFocus={toggleFocus} dailyFocusCount={dailyFocusCount} /></section>}
 
         <section className="card calendar-notes">
           <div className="calendar-section-heading"><div><h2>Daily notes</h2><span className="mut">Context and reminders for this day</span></div></div>
@@ -180,7 +183,7 @@ export default function Calendar({ of, put, del, workspace }) {
       const saved = await put('task', task);
       if (saved) {
         setTaskDraft(null);
-        if (task.date !== selectedDate) {
+        if (task.date && task.date !== selectedDate) {
           const nextDate = new Date(`${task.date}T00:00`);
           setSelectedDate(task.date); setMonth(nextDate.getMonth()); setYear(nextDate.getFullYear());
         }
@@ -249,15 +252,15 @@ function WeekGrid({ days, today, selected, scheduled, onSelect }) {
 }
 
 function DayTimeline({ date, items, onToggle, onEdit, onDelete, onReschedule, onToggleFocus, dailyFocusCount }) {
-  return <div className="calendar-day-timeline"><h2>{dateLabel(date)}</h2>{items.length ? <Agenda items={items} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onReschedule={onReschedule} onToggleFocus={onToggleFocus} dailyFocusCount={dailyFocusCount} /> : <Empty>Nothing scheduled for this day.</Empty>}</div>;
+  return <div className="calendar-day-timeline"><h2>{dateLabel(date)}</h2>{items.length ? <Agenda items={items} focusDate={date} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onReschedule={onReschedule} onToggleFocus={onToggleFocus} dailyFocusCount={dailyFocusCount} /> : <Empty>Nothing scheduled for this day.</Empty>}</div>;
 }
 
-function Agenda({ items, onToggle, onEdit, onDelete, onReschedule, onToggleFocus, dailyFocusCount = 0 }) {
+function Agenda({ items, focusDate, onToggle, onEdit, onDelete, onReschedule, onToggleFocus, dailyFocusCount = 0 }) {
   if (!items.length) return <div className="calendar-agenda-empty"><span>✓</span><p>Nothing planned for this day.</p></div>;
   return <div className="calendar-agenda-list">{items.map(item => {
     const type = TYPES.find(entry => entry.id === item.category) || TYPES[1];
     const event = item.recordType === 'event';
-    const focused = !event && item.focusDate === item.date;
+    const focused = !event && item.focusDate === focusDate;
     const today = ymd(new Date()), now = new Date(), nowTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const overdue = !event && !item.d && item.date && (item.date < today || item.date === today && item.endTime && item.endTime <= nowTime);
     const urgency = item.d ? 'Completed' : overdue ? 'Overdue' : item.date === today ? 'Due today' : item.date ? 'Upcoming' : 'No due date';
@@ -303,7 +306,8 @@ function TaskModal({ task, date, error, onError, onClose, onSave }) {
     if (startTime && endTime && endTime <= startTime) { onError('End time must be later than start time.'); return; }
     if (!title) return;
     onError(''); setSaveError(''); setSaving(true);
-    const result = await onSave({ ...task, id: task?.id || taskId, date: String(data.get('date') || date), t: title, d: task?.d || false, priority: String(data.get('priority') || task?.priority || 'normal'), ...(task?.focusDate ? { focusDate: task.focusDate === task.date ? String(data.get('date') || date) : task.focusDate } : {}), ...(startTime && endTime ? { startTime, endTime } : { startTime: '', endTime: '' }) });
+    const taskDate = String(data.get('date') || '');
+    const result = await onSave({ ...task, id: task?.id || taskId, date: taskDate, t: title, d: task?.d || false, priority: String(data.get('priority') || task?.priority || 'normal'), ...(task?.focusDate ? { focusDate: task.focusDate === task.date && taskDate ? taskDate : task.focusDate } : {}), ...(startTime && endTime ? { startTime, endTime } : { startTime: '', endTime: '' }) });
     setSaving(false);
     if (!result) setSaveError('The task could not be saved. Check the connection and try again.');
   };
@@ -312,7 +316,7 @@ function TaskModal({ task, date, error, onError, onClose, onSave }) {
       <div className="calendar-modal-header"><div><span className="calendar-modal-icon">✓</span><div><h2 id="calendar-task-title">{task ? 'Edit task' : 'Add task'}</h2><p>{task ? 'Update this task’s details and schedule.' : `Add a task to ${dateLabel(date)}.`}</p></div></div><button className="x" onClick={onClose} aria-label="Close task form" disabled={saving}>×</button></div>
       <form onSubmit={save}>
         <label className="calendar-field full"><span>Task <b>*</b></span><input name="title" type="text" defaultValue={task?.t || ''} placeholder="What needs to get done?" autoFocus maxLength={200} required /></label>
-        <label className="calendar-field full"><span>Date <b>*</b></span><input name="date" type="date" defaultValue={task?.date || date} required aria-label="Task date" /></label>
+        <label className="calendar-field full"><span>Date <small>(optional)</small></span><input name="date" type="date" defaultValue={task ? (task.date || '') : date} aria-label="Task date (optional)" /></label>
         <label className="calendar-field full"><span>Priority</span><select name="priority" defaultValue={task?.priority || 'normal'} aria-label="Task priority"><option value="critical">Critical</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label>
         <div className="calendar-field-row task-time-row">
           <TimePicker name="startTime" label="From" value={task?.startTime || ''} />
