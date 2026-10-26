@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Empty, Icon, uid } from './ui';
 
 const stamp = () => new Date().toISOString();
@@ -11,6 +11,58 @@ const updatedLabel = value => value
   ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
   : 'Not saved yet';
 const noteTitle = note => (note.title || '').trim() || (note.type === 'checklist' ? 'Untitled checklist' : 'Untitled note');
+const escapeHtml = value => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const SAFE_TAGS = new Set(['P', 'DIV', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'H1', 'H2', 'H3', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'A']);
+function sanitizeMarkup(markup) {
+  if (typeof DOMParser === 'undefined') return escapeHtml(markup.replace(/<[^>]*>/g, ''));
+  const doc = new DOMParser().parseFromString(markup, 'text/html');
+  const clean = node => {
+    if (node.nodeType === Node.TEXT_NODE) return escapeHtml(node.nodeValue || '');
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    const tag = node.tagName;
+    if (['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'SVG', 'MATH'].includes(tag)) return '';
+    const children = [...node.childNodes].map(clean).join('');
+    if (!SAFE_TAGS.has(tag)) return children;
+    if (tag === 'A') {
+      const href = node.getAttribute('href') || '';
+      if (!/^(https?:|mailto:)/i.test(href)) return children;
+      return `<a href="${escapeHtml(href)}">${children}</a>`;
+    }
+    return tag === 'BR' ? '<br>' : `<${tag.toLowerCase()}>${children}</${tag.toLowerCase()}>`;
+  };
+  return [...doc.body.childNodes].map(clean).join('');
+}
+const plainText = value => value.replace(/<br\s*\/?\s*>/gi, '\n').replace(/<\/(p|div|li|h[1-3]|blockquote)>/gi, '\n')
+  .replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+const editableHtml = note => note.bodyFormat === 'html'
+  ? sanitizeMarkup(note.body || '')
+  : (note.body || '').split(/\n{2,}/).map(part => `<p>${escapeHtml(part).replace(/\n/g, '<br>')}</p>`).join('');
+
+function RichNoteEditor({ note, editorRef, onChange }) {
+  const localRef = useRef(null);
+  useLayoutEffect(() => {
+    if (localRef.current) localRef.current.innerHTML = editableHtml(note);
+    if (editorRef) editorRef.current = localRef.current;
+    return () => { if (editorRef) editorRef.current = null; };
+  }, [note.id, editorRef]);
+
+  const update = () => {
+    if (localRef.current) onChange(sanitizeMarkup(localRef.current.innerHTML));
+  };
+  const paste = event => {
+    const clipboard = event.clipboardData;
+    if (!clipboard) return;
+    event.preventDefault();
+    const html = sanitizeMarkup(clipboard.getData('text/html') || '');
+    if (html) document.execCommand('insertHTML', false, html);
+    else document.execCommand('insertText', false, clipboard.getData('text/plain') || '');
+    update();
+  };
+
+  return <div ref={localRef} className="diary-body diary-rich-body" contentEditable suppressContentEditableWarning
+    role="textbox" aria-label="Note text" aria-multiline="true" data-placeholder="Start writing your idea or draft…"
+    onInput={update} onPaste={paste} />;
+}
 
 const TABS = [
   { id: 'all', label: 'All Notes' },
@@ -47,7 +99,8 @@ export default function Diary({ of, put, del, workspace }) {
       if (filter === 'notes' && note.type === 'checklist') return false;
       if (filter === 'checklists' && note.type !== 'checklist') return false;
       if (filter === 'pinned' && !note.pinned) return false;
-      if (search && ![note.title, note.body, ...(note.items || []).map(item => item.text), ...(note.tags || [])]
+      const searchableBody = note.bodyFormat === 'html' ? plainText(note.body || '') : note.body;
+      if (search && ![note.title, searchableBody, ...(note.items || []).map(item => item.text), ...(note.tags || [])]
         .join(' ').toLocaleLowerCase().includes(search)) return false;
       return true;
     }).sort((a, b) => {
@@ -174,18 +227,25 @@ export default function Diary({ of, put, del, workspace }) {
     }
     setDraft(null); setSelectedId(null); setDirty(false); setNewItem('');
   };
-  const insertFormat = (before, after = '', placeholder = 'text') => {
-    const area = bodyRef.current;
-    if (!area || !draft) return;
-    const start = area.selectionStart, end = area.selectionEnd;
-    const selected = (draft.body || '').slice(start, end) || placeholder;
-    const body = (draft.body || '').slice(0, start) + before + selected + after + (draft.body || '').slice(end);
-    edit({ ...draft, body });
-    requestAnimationFrame(() => {
-      area.focus();
-      const caret = start + before.length + selected.length + after.length;
-      area.setSelectionRange(caret, caret);
-    });
+  const applyFormat = (command, value = undefined) => {
+    if (!bodyRef.current) return;
+    bodyRef.current.focus();
+    document.execCommand(command, false, value);
+    if (bodyRef.current) edit({ ...draft, body: sanitizeMarkup(bodyRef.current.innerHTML), bodyFormat: 'html' });
+  };
+  const addLink = () => {
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+    const url = window.prompt('Enter a link URL (https:// or mailto:)');
+    if (!url) return;
+    if (!/^(https?:\/\/|mailto:)/i.test(url.trim())) {
+      window.alert('Use a URL that starts with https:// or mailto:.');
+      return;
+    }
+    bodyRef.current?.focus();
+    if (range && selection) { selection.removeAllRanges(); selection.addRange(range); }
+    document.execCommand('createLink', false, url.trim());
+    if (bodyRef.current) edit({ ...draft, body: sanitizeMarkup(bodyRef.current.innerHTML), bodyFormat: 'html' });
   };
 
   const emptyText = query ? 'No notes match your search.' : tab === 'archived' ? 'Archived notes will appear here.' : tab === 'checklists' ? 'No checklists yet.' : 'No notes yet. Create a note or checklist to get started.';
@@ -226,7 +286,7 @@ export default function Diary({ of, put, del, workspace }) {
                   <b>{noteTitle(note)}{note.pinned && <span className="diary-pin-mark" aria-label="Pinned">◆</span>}</b>
                   <span className="diary-preview">{note.type === 'checklist'
                     ? `${(note.items || []).filter(item => item.done).length}/${(note.items || []).length} items checked`
-                    : (note.body || 'No text yet').replace(/[#*_`>-]/g, '').slice(0, 100)}</span>
+                    : (note.body ? (note.bodyFormat === 'html' ? plainText(note.body) : note.body.replace(/[#*_`>-]/g, '')).slice(0, 100) : 'No text yet')}</span>
                   <span className="diary-entry-date">{updatedLabel(note.updatedAt)}</span>
                 </button>
                 <div className="diary-entry-menu" ref={openMenu === note.id ? menuRef : null}>
@@ -263,18 +323,18 @@ export default function Diary({ of, put, del, workspace }) {
               <form className="diary-add-item" onSubmit={addItem}><input value={newItem} onChange={event => setNewItem(event.target.value)} placeholder="Add a checklist item…" aria-label="New checklist item" required /><button className="btn">Add item</button></form>
             </div> : <>
               <div className="diary-format-toolbar" role="toolbar" aria-label="Text formatting">
-                <button onClick={() => insertFormat('**', '**', 'bold text')} aria-label="Bold" title="Bold"><b>B</b></button>
-                <button onClick={() => insertFormat('*', '*', 'italic text')} aria-label="Italic" title="Italic"><i>I</i></button>
-                <button onClick={() => insertFormat('\n## ', '\n', 'Heading')} aria-label="Heading" title="Heading">H₂</button>
+                <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => applyFormat('bold')} aria-label="Bold" title="Bold"><b>B</b></button>
+                <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => applyFormat('italic')} aria-label="Italic" title="Italic"><i>I</i></button>
+                <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => applyFormat('formatBlock', '<h2>')} aria-label="Heading" title="Heading">H₂</button>
                 <span />
-                <button onClick={() => insertFormat('\n- ', '', 'List item')} aria-label="Bulleted list" title="Bulleted list">• ≡</button>
-                <button onClick={() => insertFormat('\n1. ', '', 'List item')} aria-label="Numbered list" title="Numbered list">1. ≡</button>
-                <button onClick={() => insertFormat('\n- [ ] ', '', 'Checklist item')} aria-label="Insert checklist item" title="Checklist item">☑</button>
-                <button onClick={() => insertFormat('[', '](https://)', 'link text')} aria-label="Insert link" title="Insert link">↗</button>
-                <button onClick={() => insertFormat('\n> ', '', 'Quote')} aria-label="Quote" title="Quote">“</button>
+                <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => applyFormat('insertUnorderedList')} aria-label="Bulleted list" title="Bulleted list">• ≡</button>
+                <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => applyFormat('insertOrderedList')} aria-label="Numbered list" title="Numbered list">1. ≡</button>
+                <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => applyFormat('insertText', '☐ ')} aria-label="Insert checklist item" title="Checklist item">☑</button>
+                <button type="button" onMouseDown={event => event.preventDefault()} onClick={addLink} aria-label="Insert link" title="Insert link">↗</button>
+                <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => applyFormat('formatBlock', '<blockquote>')} aria-label="Quote" title="Quote">“</button>
               </div>
-              <textarea ref={bodyRef} className="diary-body" value={draft.body || ''} onChange={event => edit({ ...draft, body: event.target.value })}
-                placeholder="Start writing your idea or draft…" aria-label="Note text" />
+              <RichNoteEditor key={draft.id} note={draft} editorRef={bodyRef}
+                onChange={body => edit({ ...draft, body, bodyFormat: 'html' })} />
             </>}
 
             <footer className="diary-editor-footer">
