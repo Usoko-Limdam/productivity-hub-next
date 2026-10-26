@@ -152,6 +152,15 @@ export default function Diary({ of, put, del, workspace }) {
     const tags = tagDraft.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 12);
     save({ ...draft, tags });
   };
+  const closeEditor = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    if (draft && dirty && hasContent(draft)) {
+      const tags = tagDraft.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 12);
+      save({ ...draft, tags });
+    }
+    setDraft(null); setSelectedId(null); setDirty(false); setNewItem('');
+  };
   const insertFormat = (before, after = '', placeholder = 'text') => {
     const area = bodyRef.current;
     if (!area || !draft) return;
@@ -228,6 +237,7 @@ export default function Diary({ of, put, del, workspace }) {
                 <div className="diary-meta">{updatedLabel(draft.updatedAt)} <span>·</span> {draft.type === 'checklist' ? 'Checklist' : 'Personal note'} <span>·</span> {workspace?.name || 'Current workspace'}</div>
               </div>
               <button className="diary-icon-btn diary-editor-pin" onClick={() => togglePin(draft)} aria-label={draft.pinned ? 'Unpin note' : 'Pin note'} title={draft.pinned ? 'Unpin note' : 'Pin note'}>{draft.pinned ? '◆' : '⌁'}</button>
+              <button className="diary-icon-btn diary-close-editor" onClick={closeEditor} aria-label="Close note" title="Close note">×</button>
             </header>
 
             {draft.type === 'checklist' ? <div className="diary-checklist-editor">
