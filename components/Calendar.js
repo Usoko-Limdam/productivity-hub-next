@@ -63,6 +63,9 @@ export default function Calendar({ of, put, del, workspace }) {
   const dayTasks = selectedItems.filter(item => item.recordType === 'task');
   const done = dayTasks.filter(task => task.d).length;
   const todayTasks = tasks.filter(task => task.date === today);
+  const totalCompletedTasks = tasks.filter(task => task.d).length;
+  const totalOpenTasks = tasks.length - totalCompletedTasks;
+  const completionRate = tasks.length ? Math.round(totalCompletedTasks / tasks.length * 100) : 0;
   const overdue = tasks.filter(task => task.date < today && !task.d).length;
   const meetings = events.filter(event => event.type === 'meeting' && event.date >= today).sort((a, b) => `${a.date}${a.startTime || '00:00'}`.localeCompare(`${b.date}${b.startTime || '00:00'}`));
 
@@ -98,6 +101,7 @@ export default function Calendar({ of, put, del, workspace }) {
     <div className="calendar-summary">
       <Summary icon="▦" value={todayTasks.length} label="Today's tasks" detail={`${todayTasks.filter(task => !task.d).length} remaining`} tone="purple" />
       <Summary icon="✓" value={todayTasks.filter(task => task.d).length} label="Completed today" detail={`${todayTasks.length ? Math.round(todayTasks.filter(task => task.d).length / todayTasks.length * 100) : 0}% of today's tasks`} tone="green" />
+      <Summary icon="✓" value={totalCompletedTasks} label="Total completed tasks" detail={`${completionRate}% complete · ${totalCompletedTasks} done / ${totalOpenTasks} open`} tone="green" />
       <Summary icon="◷" value={overdue} label="Overdue tasks" detail={overdue ? 'Needs attention' : 'All caught up'} tone="red" />
       <Summary icon="▣" value={meetings.length} label="Upcoming meetings" detail={meetings[0] ? `Next: ${meetings[0].date === today ? formatTime(meetings[0].startTime) || 'Today' : fmtD(new Date(`${meetings[0].date}T00:00`), { month: 'short', day: 'numeric' })}` : 'None scheduled'} tone="blue" />
     </div>
