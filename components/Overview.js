@@ -63,7 +63,14 @@ export default function Overview({ of, put, money, go }) {
           <div className="top" style={{ marginBottom: 6 }}><h2 style={{ margin: 0 }}>Today</h2><button className="btn sm" onClick={() => go('cal')}>Open calendar</button></div>
           {tasks.slice(0, CAP.tasks).map(t => (
             <div className="row" key={t.id}>
-              <input type="checkbox" checked={t.d} onChange={() => put('task', { ...t, d: !t.d })} />
+              <input type="checkbox" checked={t.d} onChange={() => {
+                const d = !t.d;
+                put('task', { ...t, d });
+                if (t.projectId && t.milestoneId) {
+                  const project = of('project').find(p => p.id === t.projectId);
+                  if (project) put('project', { ...project, ms: (project.ms || []).map(m => m.id === t.milestoneId ? { ...m, d } : m) });
+                }
+              }} />
               <span className={'g ' + (t.d ? 'done' : '')}>{t.t}</span>
             </div>
           ))}

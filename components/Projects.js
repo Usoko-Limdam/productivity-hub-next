@@ -33,7 +33,7 @@ export default function Projects({ of, put, del, money, sub, go }) {
     const wl = (q.checks || []).filter(c => c.f === 'weekly');
     return { t: a.t + wl.length, d: a.d + wl.filter(c => (q.log || {})[c.id + ':' + wk]).length };
   }, { t: 0, d: 0 });
-  const card = q => <Card key={q.id} q={q} paid={paidFor(q)} open={open === q.id} toggle={() => setOpen(open === q.id ? null : q.id)} {...{ put, del, money, today, services, sales }} />;
+  const card = q => <Card key={q.id} q={q} paid={paidFor(q)} open={open === q.id} toggle={() => setOpen(open === q.id ? null : q.id)} {...{ put, del, money, today, services, sales, of }} />;
 
   if (view === 'hub') {
     return (
@@ -90,7 +90,7 @@ export default function Projects({ of, put, del, money, sub, go }) {
   );
 }
 
-function Card({ q, paid, open, toggle, put, del, money, today }) {
+function Card({ q, paid, open, toggle, put, del, money, today, of }) {
   const upd = patch => put('project', { ...q, ...patch });
   const svc = isSvc(q);
   const received = sum(paid), val = q.val || 0, bal = Math.max(val - received, 0);
@@ -178,10 +178,34 @@ function Card({ q, paid, open, toggle, put, del, money, today }) {
             <>
               <h3>Milestones</h3>
               {ms.map(m => (
-                <div className="row" key={m.id}>
-                  <input type="checkbox" checked={m.d} onChange={() => upd({ ms: ms.map(x => x.id === m.id ? { ...x, d: !x.d } : x) })} />
+                <div className="row milestone-row" key={m.id}>
+                  <input type="checkbox" checked={m.d} onChange={() => {
+                    const d = !m.d;
+                    upd({ ms: ms.map(x => x.id === m.id ? { ...x, d } : x) });
+                    const task = m.taskId && of('task').find(t => t.id === m.taskId);
+                    if (task) put('task', { ...task, d });
+                  }} />
                   <div className="g"><span className={m.d ? 'done' : ''}>{m.t}</span>{m.due && <span className={'mut ' + (!m.d && m.due < today ? 'neg' : '')}>Due {short(m.due)}</span>}</div>
-                  <button className="x" onClick={() => upd({ ms: ms.filter(x => x.id !== m.id) })} aria-label="Delete milestone">×</button>
+                  <div className="milestone-actions">
+                    <button className="btn sm" onClick={() => {
+                      const title = prompt('Edit milestone', m.t);
+                      if (title === null) return;
+                      const due = prompt('Due date (YYYY-MM-DD)', m.due || '');
+                      if (due === null) return;
+                      const task = m.taskId && of('task').find(t => t.id === m.taskId);
+                      if (task) put('task', { ...task, t: title.trim() || m.t, date: due || task.date });
+                      upd({ ms: ms.map(x => x.id === m.id ? { ...x, t: title.trim() || x.t, due } : x) });
+                    }}>Edit</button>
+                    {!m.taskId && <button className="btn sm" onClick={() => {
+                      const taskId = uid();
+                      put('task', { id: taskId, date: m.due || today, t: m.t, d: !!m.d, projectId: q.id, milestoneId: m.id });
+                      upd({ ms: ms.map(x => x.id === m.id ? { ...x, taskId } : x) });
+                    }}>Add to calendar</button>}
+                    <button className="btn sm" onClick={() => {
+                      if (m.taskId) del(m.taskId);
+                      upd({ ms: ms.filter(x => x.id !== m.id) });
+                    }}>Delete</button>
+                  </div>
                 </div>
               ))}
               {!ms.length && <p className="mut">No milestones yet.</p>}

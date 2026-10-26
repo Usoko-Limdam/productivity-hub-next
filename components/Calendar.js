@@ -172,7 +172,12 @@ export default function Calendar({ of, put, del, workspace }) {
     else setEventDraft(item);
   }
   function toggleDone(item) {
-    put(item.recordType === 'event' ? 'event' : 'task', { ...item, d: !item.d });
+    const updated = { ...item, d: !item.d };
+    put(item.recordType === 'event' ? 'event' : 'task', updated);
+    if (item.recordType === 'task' && item.projectId && item.milestoneId) {
+      const project = of('project').find(p => p.id === item.projectId);
+      if (project) put('project', { ...project, ms: (project.ms || []).map(m => m.id === item.milestoneId ? { ...m, d: updated.d } : m) });
+    }
   }
 }
 
