@@ -3,7 +3,7 @@ import { authed } from '../../../lib/auth';
 import { sql, init } from '../../../lib/db';
 import { ownerWorkspace } from '../../../lib/workspaces';
 
-const KINDS = ['task', 'note', 'diary', 'goal', 'project', 'sale', 'expense', 'setting', 'programme', 'cohort', 'learner', 'enrollment', 'instructor', 'session', 'lead', 'event'];
+const KINDS = ['task', 'note', 'diary', 'goal', 'project', 'sale', 'expense', 'setting', 'programme', 'cohort', 'learner', 'enrollment', 'instructor', 'session', 'lead', 'event', 'budget'];
 const EDUCATION = new Set(['programme', 'cohort', 'learner', 'enrollment', 'instructor', 'session', 'lead']);
 const EVENT_TYPES = new Set(['meeting', 'business', 'personal', 'deadline']);
 const REMINDER_VALUES = new Set([10, 30, 1440]);
@@ -43,6 +43,24 @@ function validEvent(data) {
     && data.endTime > data.startTime;
 }
 
+function validBudget(data) {
+  if (typeof data.month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(data.month)) return false;
+  if (typeof data.name !== 'string' || !data.name.trim() || data.name.trim().length > 100) return false;
+  if (!Number.isFinite(data.total) || data.total <= 0 || data.total > 1_000_000_000_000) return false;
+  if (!Array.isArray(data.categories) || data.categories.length > 50) return false;
+  const names = new Set();
+  let allocated = 0;
+  for (const category of data.categories) {
+    if (!category || typeof category.name !== 'string' || !category.name.trim() || category.name.trim().length > 80) return false;
+    if (!Number.isFinite(category.amount) || category.amount < 0 || category.amount > 1_000_000_000_000) return false;
+    const key = category.name.trim().toLocaleLowerCase();
+    if (names.has(key)) return false;
+    names.add(key);
+    allocated += category.amount;
+  }
+  return allocated <= data.total + 0.000001;
+}
+
 export async function POST(req) {
   if (!(await authed())) return no();
   const { kind, id, data, workspaceId } = await req.json().catch(() => ({}));
@@ -52,8 +70,9 @@ export async function POST(req) {
   if (json.length > 100_000) return bad('too large', 413);
   const workspace = await context(workspaceId);
   if (!workspace) return bad('Choose an active workspace first.', 409);
-  if (kind !== 'event' && EDUCATION.has(kind) !== (workspace.slug === 'bravestone-learning')) return bad('This record type is not available in the active workspace.', 403);
+  if (kind !== 'event' && kind !== 'budget' && EDUCATION.has(kind) !== (workspace.slug === 'bravestone-learning')) return bad('This record type is not available in the active workspace.', 403);
   if (kind === 'event' && !validEvent(data)) return bad('Event details are invalid.', 400);
+  if (kind === 'budget' && (!validBudget(data) || id !== `budget:${workspace.id}:${data.month}`)) return bad('Budget details are invalid or this workspace already has a budget for that month.', 400);
   if (!(await validRelations(workspace, kind, data))) return bad('Linked records must exist in this workspace.', 400);
   const rows = await sql`INSERT INTO items (id, kind, data, workspace_id) VALUES (${id}, ${kind}, ${json}::jsonb, ${workspace.id})
     ON CONFLICT (id) DO UPDATE SET kind = EXCLUDED.kind, data = EXCLUDED.data

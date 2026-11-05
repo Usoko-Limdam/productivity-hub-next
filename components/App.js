@@ -136,7 +136,7 @@ export default function App({ initial, workspace, workspaces }) {
 
   const cur = of('setting').find(s => s.id === 'cur')?.v ?? '₦';
   const money = n => cur + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
-  const p = { of, put, del, money, go, sub: route.sub };
+  const p = { of, put, del, money, go, sub: route.sub, workspace };
   const { tab } = route;
   const isBravestone = workspace?.slug === 'bravestone-learning';
   const braveTitle = {

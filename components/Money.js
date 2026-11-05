@@ -11,15 +11,20 @@ const inclusiveDays = (from, to) => {
   return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 864e5) + 1;
 };
 
-export default function Money({ of, put, del, money, sub, go }) {
+export default function Money({ of, put, del, money, sub, go, workspace }) {
   const today = ymd(new Date());
   const monthStart = `${today.slice(0, 7)}-01`;
+  const allExpenses = of('expense');
+  const budgets = of('budget').slice().sort((a, b) => a.month.localeCompare(b.month));
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(today);
   const [appliedRange, setAppliedRange] = useState({ from: monthStart, to: today });
   const [rangeError, setRangeError] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [addType, setAddType] = useState('sale');
+  const [budgetMonth, setBudgetMonth] = useState(today.slice(0, 7));
+  const [budgetModal, setBudgetModal] = useState(false);
+  const [budgetMessage, setBudgetMessage] = useState('');
   const view = VIEWS.includes(sub) ? sub : 'hub';
   const goto = id => go('money', id === 'hub' ? null : id);
 
@@ -30,6 +35,21 @@ export default function Money({ of, put, del, money, sub, go }) {
   // Personal-scope expenses are founder draws and reduce the business profit shown here.
   const biz = exps.filter(x => x.scope !== 'personal'), per = exps.filter(x => x.scope === 'personal');
   const profit = sum(sales) - sum(biz) - sum(per);
+  const activeBudget = budgets.find(budget => budget.month === budgetMonth);
+  const monthBusinessExpenses = allExpenses.filter(expense => expense.scope !== 'personal' && typeof expense.date === 'string' && expense.date.startsWith(budgetMonth));
+  const actualSpending = sum(monthBusinessExpenses);
+  const monthlyBudgetTotal = Number(activeBudget?.total || 0);
+  const budgetRemaining = monthlyBudgetTotal - actualSpending;
+  const utilization = monthlyBudgetTotal ? actualSpending / monthlyBudgetTotal * 100 : 0;
+  const budgetCategoryStats = (activeBudget?.categories || []).map(category => {
+    const spent = sum(monthBusinessExpenses.filter(expense => String(expense.label || '').trim().toLocaleLowerCase() === category.name.trim().toLocaleLowerCase()));
+    return { ...category, spent, remaining: Number(category.amount) - spent, utilization: Number(category.amount) ? spent / Number(category.amount) * 100 : spent ? 100 : 0 };
+  });
+  const knownBudgetCategories = new Set((activeBudget?.categories || []).map(category => category.name.trim().toLocaleLowerCase()));
+  const uncategorizedSpending = sum(monthBusinessExpenses.filter(expense => !knownBudgetCategories.has(String(expense.label || '').trim().toLocaleLowerCase())));
+  const allocatedTotal = (activeBudget?.categories || []).reduce((total, category) => total + Number(category.amount || 0), 0);
+  const unallocatedTotal = monthlyBudgetTotal - allocatedTotal;
+  const expenseCategorySuggestions = [...new Set([...allExpenses.filter(expense => expense.scope !== 'personal').map(expense => expense.label?.trim()), ...['Marketing & Advertising', 'Salaries & Contractors', 'Software & Subscriptions', 'Operations', 'Office & Administration', 'Utilities', 'Transportation', 'Professional Services', 'Miscellaneous']].filter(Boolean))];
 
   const applyRange = () => {
     if (!fromDate || !toDate) { setRangeError('Choose both a From date and a To date.'); return; }
@@ -115,6 +135,22 @@ export default function Money({ of, put, del, money, sub, go }) {
           <Hub title="Founder draws" big={money(founderDraws)} note={`${plural(per.length, 'entry', 'entries')} · included in profit`} onClick={() => goto('personal')} />
           <div className="hub money-profit"><span className="hl">Profit after expenses</span><b className={profit < 0 ? 'neg' : ''}>{money(profit)}</b><small>After business expenses and founder draws</small></div>
         </div>
+        <BudgetDashboard budget={activeBudget} budgets={budgets} month={budgetMonth} setMonth={setBudgetMonth} actual={actualSpending} total={monthlyBudgetTotal} remaining={budgetRemaining} utilization={utilization} categories={budgetCategoryStats} uncategorized={uncategorizedSpending} allocated={allocatedTotal} unallocated={unallocatedTotal} expenses={allExpenses} money={money} suggestions={expenseCategorySuggestions} message={budgetMessage} onCreate={() => { setBudgetMessage(''); setBudgetModal(true); }} onEdit={() => { setBudgetMessage(''); setBudgetModal(true); }} onSaveBudget={async data => {
+          const id = `budget:${workspace?.id}:${data.month}`;
+          const result = await put('budget', { ...data, id });
+          setBudgetMessage(result ? 'Budget saved.' : 'Could not save the budget. Check your connection and try again.');
+          return result;
+        }} onRemoveCategory={categoryId => {
+          if (!activeBudget) return;
+          put('budget', { ...activeBudget, categories: activeBudget.categories.filter(category => category.id !== categoryId) });
+          setBudgetMessage('Category allocation removed. Related expenses remain in your transaction history.');
+        }} />
+        {budgetModal && <BudgetModal key={activeBudget?.id || budgetMonth} budget={activeBudget} month={budgetMonth} suggestions={expenseCategorySuggestions} onClose={() => setBudgetModal(false)} onSave={async data => {
+          const result = await put('budget', { ...data, id: activeBudget?.id || `budget:${workspace?.id}:${data.month}` });
+          setBudgetMessage(result ? 'Budget saved.' : 'Could not save the budget. Check your connection and try again.');
+          if (result) setBudgetModal(false);
+          return result;
+        }} />}
         <SalesChart sales={sales} money={money} range={appliedRange} />
         <RecentTransactions items={transactionList.slice(0, 6)} money={money} go={goto} />
       </>
@@ -284,4 +320,78 @@ function SalesChart({ sales, money, range }) {
       ) : <Empty>{range ? 'No sales recorded in this date range.' : 'No sales recorded yet.'}</Empty>}
     </div>
   );
+}
+
+function BudgetDashboard({ budget, budgets, month, setMonth, actual, total, remaining, utilization, categories, uncategorized, allocated, unallocated, expenses, money, suggestions, message, onCreate, onEdit, onRemoveCategory }) {
+  const history = budgets.slice(-6).map(item => ({
+    ...item,
+    actual: sum(expenses.filter(expense => expense.scope !== 'personal' && expense.date?.startsWith(item.month))),
+    label: new Date(`${item.month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'short', year: '2-digit' }),
+  }));
+  const max = Math.max(1, ...history.flatMap(item => [Number(item.total) || 0, item.actual]));
+  const status = value => value >= 100 ? 'exceeded' : value >= 80 ? 'warning' : 'normal';
+  const cap = value => Math.max(0, Math.min(100, value));
+  const monthLabel = month ? new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : '';
+  return <section className="budget-dashboard" aria-label="Monthly budget management">
+    <div className="budget-kpis">
+      <div className="budget-kpi"><span>Total budget</span><b>{money(total)}</b><small>{monthLabel}</small></div>
+      <div className="budget-kpi"><span>Actual spending</span><b>{money(actual)}</b><small>Business expenses only</small></div>
+      <div className={'budget-kpi ' + (remaining < 0 ? 'is-over' : '')}><span>Budget remaining</span><b>{money(remaining)}</b><small>{remaining < 0 ? `${money(Math.abs(remaining))} over budget` : 'Available to spend'}</small></div>
+      <div className="budget-kpi"><span>Budget utilization</span><b>{total ? `${utilization.toFixed(1)}%` : '—'}</b><small>{total ? 'Actual spending ÷ total budget' : 'Create a budget to track utilization'}</small></div>
+    </div>
+
+    <section className="card budget-monthly">
+      <header className="budget-heading"><div><h2>Monthly budget</h2><p>Plan spending and track actual business expenses.</p></div><div className="budget-controls"><label className="sr" htmlFor="budget-month">Budget month</label><input id="budget-month" type="month" value={month} onChange={event => setMonth(event.target.value)} /><button className="btn pri" onClick={budget ? onEdit : onCreate}>{budget ? 'Edit budget' : '＋ Create budget'}</button></div></header>
+      {budget ? <>
+        <div className="budget-progress-summary"><div><b>{total ? `${utilization.toFixed(1)}%` : '—'}</b><span>Budget utilization</span></div><div className="budget-progress-main"><div className="budget-track"><i className={status(utilization)} style={{ width: `${cap(utilization)}%` }} /></div><small>{money(allocated)} allocated to categories · {money(Math.max(0, unallocated))} unallocated</small></div><div><b>{money(actual)}</b><span>Spent</span></div><div><b className={remaining < 0 ? 'neg' : ''}>{money(remaining)}</b><span>{remaining < 0 ? 'Overspent' : 'Remaining'}</span></div></div>
+        {utilization >= 100 ? <p className="budget-alert exceeded">Budget exceeded by {money(Math.max(0, actual - total))}.</p> : utilization >= 80 ? <p className="budget-alert warning">You have used {utilization.toFixed(1)}% of this month’s budget.</p> : null}
+        <div className="budget-table-wrap"><table className="budget-table"><thead><tr><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Progress</th><th><span className="sr">Actions</span></th></tr></thead><tbody>
+          {categories.map(category => <tr key={category.id}><td><span className="budget-category-icon">{category.name.slice(0,1).toUpperCase()}</span>{category.name}</td><td>{money(category.amount)}</td><td>{money(category.spent)}</td><td className={category.remaining < 0 ? 'neg' : ''}>{money(category.remaining)}</td><td><div className="budget-category-progress"><div className="budget-track"><i className={status(category.utilization)} style={{ width: `${cap(category.utilization)}%` }} /></div><b>{category.utilization.toFixed(0)}%</b></div>{category.utilization >= 100 && <small className="budget-row-alert">Exceeded by {money(category.spent - Number(category.amount))}</small>}{category.utilization >= 80 && category.utilization < 100 && <small className="budget-row-alert warning-text">Near limit</small>}</td><td className="budget-row-actions"><button className="x txt" onClick={onEdit}>Edit</button><button className="x txt" onClick={() => onRemoveCategory(category.id)} aria-label={`Remove ${category.name} allocation`}>Remove</button></td></tr>)}
+          {uncategorized > 0 && <tr className="budget-uncategorized"><td><span className="budget-category-icon">?</span>Uncategorized spending</td><td>—</td><td>{money(uncategorized)}</td><td>—</td><td>Assign a matching category to include it above.</td><td /> </tr>}
+        </tbody></table></div>
+        {!categories.length && !uncategorized && <p className="budget-empty-inline">No categories yet. Edit this budget to add category allocations.</p>}
+        {unallocated > 0 && <p className="budget-unallocated">{money(unallocated)} of this budget has not been assigned to a category yet.</p>}
+      </> : <div className="budget-empty"><span className="budget-empty-icon">◷</span><div><b>No budget for {monthLabel}</b><p>Create a monthly budget to compare planned amounts with recorded business expenses. Existing expenses will be counted automatically.</p></div><button className="btn pri" onClick={onCreate}>Create budget</button></div>}
+      {message && <p className="budget-message" role="status">{message}</p>}
+    </section>
+
+    <div className="budget-lower-grid">
+      <section className="card budget-history"><div className="budget-heading"><div><h2>Budget vs actual</h2><p>Monthly totals across saved budgets.</p></div><div className="budget-legend"><span><i /> Budget</span><span><i /> Actual</span></div></div>
+        {history.length ? <div className="budget-chart" role="img" aria-label="Budget versus actual spending by month">{history.map(item => <div className="budget-chart-month" key={item.id}><div className="budget-chart-bars"><i className="planned" style={{ height: `${Math.max(3, Number(item.total) / max * 100)}%` }} title={`Budget ${money(item.total)}`} /><i className="actual" style={{ height: `${Math.max(item.actual ? 3 : 0, item.actual / max * 100)}%` }} title={`Actual ${money(item.actual)}`} /></div><small>{item.label}</small></div>)}</div> : <div className="budget-chart-empty">Create budgets for multiple months to see a historical comparison.</div>}
+      </section>
+      <section className="card budget-insights"><h2>Expense tracking</h2><p>Actuals are calculated from business expense transactions dated in {monthLabel}. Sales and founder draws are excluded.</p><p>To match spending to a budget category, use the same category label on the expense transaction.</p>{uncategorized > 0 && <p className="budget-alert warning">Uncategorized expenses: {money(uncategorized)}</p>}<span className="budget-suggestion-note">Existing categories: {suggestions.length ? suggestions.slice(0, 5).join(' · ') : 'No expense categories yet'}</span></section>
+    </div>
+  </section>;
+}
+
+function BudgetModal({ budget, month, suggestions, onClose, onSave }) {
+  const [name, setName] = useState(budget?.name || 'Monthly operating budget');
+  const [total, setTotal] = useState(budget?.total ?? '');
+  const [categories, setCategories] = useState(() => (budget?.categories || []).map(item => ({ ...item, amount: String(item.amount) })));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const allocated = categories.reduce((sum_, item) => sum_ + Number(item.amount || 0), 0);
+  const balance = Number(total || 0) - allocated;
+  const update = (id, field, value) => setCategories(rows => rows.map(row => row.id === id ? { ...row, [field]: value } : row));
+  const addCategory = () => setCategories(rows => [...rows, { id: uid(), name: '', amount: '' }]);
+  const save = async event => {
+    event.preventDefault();
+    const cleanCategories = categories.map(category => ({ id: category.id || uid(), name: category.name.trim(), amount: Number(category.amount) }));
+    if (!name.trim()) { setError('Enter a budget name.'); return; }
+    if (!Number.isFinite(Number(total)) || Number(total) <= 0) { setError('Enter a total budget greater than zero.'); return; }
+    if (cleanCategories.some(category => !category.name || !Number.isFinite(category.amount) || category.amount < 0)) { setError('Each category needs a name and a valid allocation.'); return; }
+    if (new Set(cleanCategories.map(category => category.name.toLocaleLowerCase())).size !== cleanCategories.length) { setError('Category names must be unique.'); return; }
+    if (cleanCategories.reduce((sum_, category) => sum_ + category.amount, 0) > Number(total) + 0.000001) { setError('Category allocations cannot exceed the total budget.'); return; }
+    setSaving(true); setError('');
+    try {
+      const ok = await onSave({ name: name.trim(), month, total: Number(total), categories: cleanCategories });
+      if (!ok) setError('The budget could not be saved. Check your connection and try again.');
+    } catch { setError('The budget could not be saved. Check your connection and try again.'); }
+    finally { setSaving(false); }
+  };
+  return <div className="budget-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="budget-modal" role="dialog" aria-modal="true" aria-labelledby="budget-modal-title"><header className="budget-heading"><div><h2 id="budget-modal-title">{budget ? 'Edit monthly budget' : 'Create monthly budget'}</h2><p>{budget ? `Update your ${month} budget and allocations.` : `Set a plan for ${month}.`}</p></div><button type="button" className="x" onClick={onClose} aria-label="Close">×</button></header>
+    <form onSubmit={save}><label className="budget-field">Budget name<input value={name} maxLength={100} onChange={event => setName(event.target.value)} required /></label><div className="budget-form-row"><label className="budget-field">Month<input type="month" value={month} disabled aria-describedby="budget-month-help" /></label><label className="budget-field">Total budget<input type="number" min="0.01" step="0.01" value={total} onChange={event => setTotal(event.target.value)} required /></label></div><small id="budget-month-help" className="budget-muted">A workspace can have one budget per month.</small>
+      <div className="budget-category-heading"><b>Category allocations</b><button type="button" className="btn sm" onClick={addCategory}>＋ Add category</button></div><datalist id="budget-category-options">{suggestions.map(item => <option key={item} value={item} />)}</datalist><div className="budget-category-fields">{categories.map(category => <div className="budget-category-field-row" key={category.id}><input aria-label="Category name" list="budget-category-options" placeholder="Category name" value={category.name} onChange={event => update(category.id, 'name', event.target.value)} /><input aria-label="Allocated amount" type="number" min="0" step="0.01" placeholder="Amount" value={category.amount} onChange={event => update(category.id, 'amount', event.target.value)} /><button type="button" className="x" aria-label={`Remove ${category.name || 'category'}`} onClick={() => setCategories(rows => rows.filter(row => row.id !== category.id))}>×</button></div>)}{!categories.length && <p className="budget-empty-inline">No categories added. You can add categories now or later.</p>}</div>
+      <p className={'budget-allocation-balance' + (balance < -0.000001 ? ' neg' : '')}>{balance >= 0 ? `${new Intl.NumberFormat(undefined, { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 }).format(balance)} unallocated` : 'Category allocations exceed the total budget.'}</p>{error && <p className="budget-form-error" role="alert">{error}</p>}<footer className="budget-modal-actions"><button className="btn" type="button" onClick={onClose} disabled={saving}>Cancel</button><button className="btn pri" type="submit" disabled={saving}>{saving ? 'Saving…' : budget ? 'Save changes' : 'Create budget'}</button></footer>
+    </form></section></div>;
 }
