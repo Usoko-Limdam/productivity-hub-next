@@ -1,8 +1,10 @@
 'use client';
 import { useState } from 'react';
 import { Empty, Hub, Icon, Seg, submit, sum, uid, ymd } from './ui';
+import { expenseCategory, summarizeBudgetMonth } from '../lib/budget.mjs';
 
 const VIEWS = ['transactions', 'sales', 'business', 'personal'];
+const DEFAULT_EXPENSE_CATEGORIES = ['Marketing & Advertising', 'Salaries & Contractors', 'Software & Subscriptions', 'Operations', 'Office & Administration', 'Utilities', 'Transportation', 'Professional Services', 'Miscellaneous'];
 const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
 const displayDate = value => value ? new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 const inclusiveDays = (from, to) => {
@@ -36,20 +38,17 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
   const biz = exps.filter(x => x.scope !== 'personal'), per = exps.filter(x => x.scope === 'personal');
   const profit = sum(sales) - sum(biz) - sum(per);
   const activeBudget = budgets.find(budget => budget.month === budgetMonth);
-  const monthBusinessExpenses = allExpenses.filter(expense => expense.scope !== 'personal' && typeof expense.date === 'string' && expense.date.startsWith(budgetMonth));
-  const actualSpending = sum(monthBusinessExpenses);
+  const budgetSummary = summarizeBudgetMonth(activeBudget, allExpenses, budgetMonth);
+  const actualSpending = budgetSummary.actual;
   const monthlyBudgetTotal = Number(activeBudget?.total || 0);
   const budgetRemaining = activeBudget ? monthlyBudgetTotal - actualSpending : 0;
   const utilization = monthlyBudgetTotal ? actualSpending / monthlyBudgetTotal * 100 : 0;
-  const budgetCategoryStats = (activeBudget?.categories || []).map(category => {
-    const spent = sum(monthBusinessExpenses.filter(expense => String(expense.label || '').trim().toLocaleLowerCase() === category.name.trim().toLocaleLowerCase()));
-    return { ...category, spent, remaining: Number(category.amount) - spent, utilization: Number(category.amount) ? spent / Number(category.amount) * 100 : spent ? 100 : 0 };
-  });
-  const knownBudgetCategories = new Set((activeBudget?.categories || []).map(category => category.name.trim().toLocaleLowerCase()));
-  const uncategorizedSpending = sum(monthBusinessExpenses.filter(expense => !knownBudgetCategories.has(String(expense.label || '').trim().toLocaleLowerCase())));
+  const budgetCategoryStats = budgetSummary.categories;
+  const unbudgetedCategories = budgetSummary.unbudgetedCategories;
+  const uncategorizedSpending = budgetSummary.unbudgeted;
   const allocatedTotal = (activeBudget?.categories || []).reduce((total, category) => total + Number(category.amount || 0), 0);
   const unallocatedTotal = monthlyBudgetTotal - allocatedTotal;
-  const expenseCategorySuggestions = [...new Set([...allExpenses.filter(expense => expense.scope !== 'personal').map(expense => expense.label?.trim()), ...['Marketing & Advertising', 'Salaries & Contractors', 'Software & Subscriptions', 'Operations', 'Office & Administration', 'Utilities', 'Transportation', 'Professional Services', 'Miscellaneous']].filter(Boolean))];
+  const expenseCategorySuggestions = [...new Set([...budgets.flatMap(budget => (budget.categories || []).map(category => category.name.trim())), ...allExpenses.filter(expense => expense.scope !== 'personal').map(expenseCategory), ...DEFAULT_EXPENSE_CATEGORIES].filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
   const applyRange = () => {
     if (!fromDate || !toDate) { setRangeError('Choose both a From date and a To date.'); return; }
@@ -78,7 +77,7 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
     const personal = kind === 'personal';
     put(kind === 'sale' ? 'sale' : 'expense', {
       id: uid(), date: d.date, label: d.label, amt: +d.amt, note: d.note,
-      ...(kind === 'sale' ? {} : { scope: personal ? 'personal' : 'business' }),
+      ...(kind === 'sale' ? {} : { scope: personal ? 'personal' : 'business', ...(personal ? {} : { category: d.category.trim() }) }),
     });
     setShowAdd(false);
   });
@@ -114,7 +113,8 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
             <option value="sale">Sale</option><option value="business">Business expense</option><option value="personal">Founder draw</option>
           </select>
           <input type="date" name="date" defaultValue={today} required aria-label="Date" />
-          <input name="label" placeholder={addType === 'sale' ? 'Project / client' : addType === 'personal' ? 'What for (e.g. Founder draw)' : 'Category (e.g. Software)'} required aria-label="Description" />
+          <input name="label" placeholder={addType === 'sale' ? 'Project / client' : addType === 'personal' ? 'What for (e.g. Founder draw)' : 'Expense description (e.g. Facebook Ads)'} required aria-label={addType === 'business' ? 'Expense description' : 'Description'} />
+          {addType === 'business' && <label className="money-expense-category">Expense category<input name="category" list="money-expense-category-options" placeholder="Select or type a category" required aria-label="Expense category" /><datalist id="money-expense-category-options">{expenseCategorySuggestions.map(category => <option value={category} key={category} />)}</datalist></label>}
           <input name="amt" type="number" min="0" step="any" placeholder="Amount" required aria-label="Amount" />
           <input name="note" placeholder="Note (optional)" aria-label="Note" />
           <button className="btn pri">Save transaction</button>
@@ -135,7 +135,7 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
           <Hub title="Founder draws" big={money(founderDraws)} note={`${plural(per.length, 'entry', 'entries')} · included in profit`} onClick={() => goto('personal')} />
           <div className="hub money-profit"><span className="hl">Profit after expenses</span><b className={profit < 0 ? 'neg' : ''}>{money(profit)}</b><small>After business expenses and founder draws</small></div>
         </div>
-        <BudgetDashboard budget={activeBudget} budgets={budgets} month={budgetMonth} setMonth={setBudgetMonth} actual={actualSpending} total={monthlyBudgetTotal} remaining={budgetRemaining} utilization={utilization} categories={budgetCategoryStats} uncategorized={uncategorizedSpending} allocated={allocatedTotal} unallocated={unallocatedTotal} expenses={allExpenses} money={money} suggestions={expenseCategorySuggestions} message={budgetMessage} onCreate={() => { setBudgetMessage(''); setBudgetModal(true); }} onEdit={() => { setBudgetMessage(''); setBudgetModal(true); }} onSaveBudget={async data => {
+        <BudgetDashboard budget={activeBudget} budgets={budgets} month={budgetMonth} setMonth={setBudgetMonth} actual={actualSpending} total={monthlyBudgetTotal} remaining={budgetRemaining} utilization={utilization} categories={budgetCategoryStats} uncategorized={uncategorizedSpending} unbudgetedCategories={unbudgetedCategories} allocated={allocatedTotal} unallocated={unallocatedTotal} expenses={allExpenses} money={money} suggestions={expenseCategorySuggestions} message={budgetMessage} onCreate={() => { setBudgetMessage(''); setBudgetModal(true); }} onEdit={() => { setBudgetMessage(''); setBudgetModal(true); }} onSaveBudget={async data => {
           const id = `budget:${workspace?.id}:${data.month}`;
           const result = await put('budget', { ...data, id }, true);
           setBudgetMessage(result.ok ? 'Budget saved.' : result.error);
@@ -179,16 +179,17 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
       {!transactions && <div className="card">
         <h2>{sales_ ? 'Record a sale' : personal ? 'Record a founder draw' : 'Record a business expense'}</h2>
         <datalist id="sg">{suggest.map(s => <option key={s} value={s} />)}</datalist>
-        <form style={{ marginTop: 0 }} onSubmit={submit(d => put(kind, { id: uid(), date: d.date, label: d.label, amt: +d.amt, note: d.note, ...(sales_ ? {} : { scope: personal ? 'personal' : 'business' }) }))}>
+        <form style={{ marginTop: 0 }} onSubmit={submit(d => put(kind, { id: uid(), date: d.date, label: d.label, amt: +d.amt, note: d.note, ...(sales_ ? {} : { scope: personal ? 'personal' : 'business', ...(personal ? {} : { category: d.category.trim() }) }) }))}>
           <input type="date" name="date" defaultValue={today} required aria-label="Date" />
-          <input name="label" list="sg" placeholder={sales_ ? 'Project / client' : personal ? 'What for (e.g. Founder withdrawal)' : 'Category (e.g. Software)'} required />
+          <input name="label" list={sales_ ? 'sg' : undefined} placeholder={sales_ ? 'Project / client' : personal ? 'What for (e.g. Founder withdrawal)' : 'Expense description (e.g. Facebook Ads)'} required aria-label={sales_ ? 'Sale description' : personal ? 'Founder draw description' : 'Expense description'} />
+          {!sales_ && !personal && <label className="money-expense-category">Expense category<input name="category" list="money-expense-category-options-ledger" placeholder="Select or type a category" required aria-label="Expense category" /><datalist id="money-expense-category-options-ledger">{expenseCategorySuggestions.map(category => <option value={category} key={category} />)}</datalist></label>}
           <input name="amt" type="number" min="0" step="any" placeholder="Amount" required />
           <input name="note" placeholder="Note" /><button className="btn pri">Add</button>
         </form>
       </div>}
       <div className="card">
         <h2>{title} <span className="pill">{list.length}</span></h2>
-        {list.slice().sort((a, b) => b.date.localeCompare(a.date)).map(x => <Entry key={x.id} x={x} kind={transactions ? x._kind : kind} money={money} put={put} del={del} transactions={transactions} />)}
+        {list.slice().sort((a, b) => b.date.localeCompare(a.date)).map(x => <Entry key={x.id} x={x} kind={transactions ? x._kind : kind} money={money} put={put} del={del} transactions={transactions} categorySuggestions={expenseCategorySuggestions} />)}
         {!list.length && <Empty>{appliedRange ? 'Nothing recorded in this date range.' : 'Nothing recorded yet.'}</Empty>}
       </div>
     </>
@@ -196,11 +197,12 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
 }
 
 // One ledger row, with inline editing. For expenses the editor can also move the entry between business and personal.
-function Entry({ x, kind, money, put, del, transactions = false }) {
+function Entry({ x, kind, money, put, del, transactions = false, categorySuggestions = [] }) {
   const [ed, setEd] = useState(false);
+  const [editScope, setEditScope] = useState(x.scope === 'personal' ? 'personal' : 'business');
   const sale = kind === 'sale';
   const personal = x.scope === 'personal';
-  const category = sale ? 'Sales' : personal ? 'Founder draws' : 'Business expenses';
+  const category = sale ? 'Sales' : personal ? 'Founder draws' : expenseCategory(x);
   const type = sale ? 'income' : personal ? 'draw' : 'expense';
   if (ed) {
     return (
@@ -209,7 +211,7 @@ function Entry({ x, kind, money, put, del, transactions = false }) {
         const d = Object.fromEntries(new FormData(e.currentTarget));
         const record = { ...x };
         delete record._kind;
-        put(kind, { ...record, date: d.date, label: d.label, amt: +d.amt, note: d.note, ...(kind === 'expense' ? { scope: d.scope } : {}) });
+        put(kind, { ...record, date: d.date, label: d.label, amt: +d.amt, note: d.note, ...(kind === 'expense' ? { scope: d.scope, category: d.scope === 'business' ? d.category.trim() : '' } : {}) });
         setEd(false);
       }}>
         <input type="date" name="date" defaultValue={x.date} required aria-label="Date" />
@@ -217,10 +219,12 @@ function Entry({ x, kind, money, put, del, transactions = false }) {
         <input name="amt" type="number" min="0" step="any" defaultValue={x.amt} required aria-label="Amount" />
         <input name="note" defaultValue={x.note || ''} placeholder="Note" aria-label="Note" />
         {kind === 'expense' && (
-          <select name="scope" defaultValue={x.scope === 'personal' ? 'personal' : 'business'} aria-label="Type">
+          <select name="scope" value={editScope} onChange={event => setEditScope(event.target.value)} aria-label="Type">
             <option value="business">Business expense</option><option value="personal">Personal expense</option>
           </select>
         )}
+        {kind === 'expense' && editScope === 'business' && <input name="category" list={`expense-categories-${x.id}`} defaultValue={x.category || x.label || ''} placeholder="Expense category" required aria-label="Expense category" />}
+        {kind === 'expense' && editScope === 'business' && <datalist id={`expense-categories-${x.id}`}>{categorySuggestions.map(value => <option value={value} key={value} />)}</datalist>}
         <button className="btn pri sm">Save</button><button type="button" className="btn sm" onClick={() => setEd(false)}>Cancel</button>
       </form>
     );
@@ -242,7 +246,7 @@ function Entry({ x, kind, money, put, del, transactions = false }) {
   }
   return (
     <div className="row">
-      <div className="g"><b>{x.label}</b><span className="mut">{x.date}{x.note ? ' · ' + x.note : ''}</span></div>
+      <div className="g"><b>{x.label}</b><span className="mut">{x.date}{kind === 'expense' && !personal ? ` · ${expenseCategory(x)}` : ''}{x.note ? ' · ' + x.note : ''}</span></div>
       <span className="amt">{money(x.amt)}</span>
       <button className="x txt" onClick={() => setEd(true)} aria-label="Edit entry">Edit</button>
       <button className="x" onClick={() => { if (confirm('Delete this entry?')) del(x.id); }} aria-label="Delete entry">×</button>
@@ -258,7 +262,7 @@ function RecentTransactions({ items, money, go }) {
         <div className="transaction-head" aria-hidden="true"><span>Date</span><span>Description</span><span>Category</span><span>Amount</span><span>Type</span></div>
         {items.map(x => {
           const sale = x._kind === 'sale';
-          const category = sale ? 'Sales' : x.scope === 'personal' ? 'Founder draws' : 'Business expenses';
+          const category = sale ? 'Sales' : x.scope === 'personal' ? 'Founder draws' : expenseCategory(x);
           return <div className={'transaction-row ' + (sale ? 'income' : x.scope === 'personal' ? 'draw' : 'expense')} key={`${x._kind}-${x.id}`}>
             <span className="transaction-date">{displayDate(x.date)}</span>
             <span className="transaction-description"><b>{x.label}</b>{x.note && <small>{x.note}</small>}</span>
@@ -322,7 +326,7 @@ function SalesChart({ sales, money, range }) {
   );
 }
 
-function BudgetDashboard({ budget, budgets, month, setMonth, actual, total, remaining, utilization, categories, uncategorized, allocated, unallocated, expenses, money, suggestions, message, onCreate, onEdit, onRemoveCategory }) {
+function BudgetDashboard({ budget, budgets, month, setMonth, actual, total, remaining, utilization, categories, uncategorized, unbudgetedCategories, allocated, unallocated, expenses, money, suggestions, message, onCreate, onEdit, onRemoveCategory }) {
   const history = budgets.slice(-6).map(item => ({
     ...item,
     actual: sum(expenses.filter(expense => expense.scope !== 'personal' && expense.date?.startsWith(item.month))),
@@ -347,11 +351,12 @@ function BudgetDashboard({ budget, budgets, month, setMonth, actual, total, rema
         {utilization >= 100 ? <p className="budget-alert exceeded">Budget exceeded by {money(Math.max(0, actual - total))}.</p> : utilization >= 80 ? <p className="budget-alert warning">You have used {utilization.toFixed(1)}% of this month’s budget.</p> : null}
         <div className="budget-table-wrap"><table className="budget-table"><thead><tr><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Progress</th><th><span className="sr">Actions</span></th></tr></thead><tbody>
           {categories.map(category => <tr key={category.id}><td><span className="budget-category-icon">{category.name.slice(0,1).toUpperCase()}</span>{category.name}</td><td>{money(category.amount)}</td><td>{money(category.spent)}</td><td className={category.remaining < 0 ? 'neg' : ''}>{money(category.remaining)}</td><td><div className="budget-category-progress"><div className="budget-track"><i className={status(category.utilization)} style={{ width: `${cap(category.utilization)}%` }} /></div><b>{category.utilization.toFixed(0)}%</b></div>{category.utilization >= 100 && <small className="budget-row-alert">Exceeded by {money(category.spent - Number(category.amount))}</small>}{category.utilization >= 80 && category.utilization < 100 && <small className="budget-row-alert warning-text">Near limit</small>}</td><td className="budget-row-actions"><button className="x txt" onClick={onEdit}>Edit</button><button className="x txt" onClick={() => onRemoveCategory(category.id)} aria-label={`Remove ${category.name} allocation`}>Remove</button></td></tr>)}
-          {uncategorized > 0 && <tr className="budget-uncategorized"><td><span className="budget-category-icon">?</span>Uncategorized spending</td><td>—</td><td>{money(uncategorized)}</td><td>—</td><td>Assign a matching category to include it above.</td><td /> </tr>}
+          {unbudgetedCategories.map(item => <tr className="budget-uncategorized" key={item.name}><td><span className="budget-category-icon">?</span>{item.name === 'Uncategorized' ? 'Uncategorized spending' : item.name}</td><td>Unbudgeted</td><td>{money(item.spent)}</td><td>—</td><td>Spending has no allocation yet.</td><td className="budget-row-actions"><button className="x txt" onClick={onEdit}>Allocate</button></td></tr>)}
         </tbody></table></div>
         {!categories.length && !uncategorized && <p className="budget-empty-inline">No categories yet. Edit this budget to add category allocations.</p>}
         {unallocated > 0 && <p className="budget-unallocated">{money(unallocated)} of this budget has not been assigned to a category yet.</p>}
       </> : <div className="budget-empty"><span className="budget-empty-icon">◷</span><div><b>No budget for {monthLabel}</b><p>Create a monthly budget to compare planned amounts with recorded business expenses. Existing expenses will be counted automatically.</p></div><button className="btn pri" onClick={onCreate}>Create budget</button></div>}
+      {!budget && unbudgetedCategories.length > 0 && <div className="budget-unbudgeted-list"><b>Business spending in {monthLabel}</b>{unbudgetedCategories.map(item => <div key={item.name}><span>{item.name}</span><strong>{money(item.spent)}</strong></div>)}<small>These expenses are counted in actual spending and can be assigned to budget categories when you create a budget.</small></div>}
       {message && <p className="budget-message" role="status">{message}</p>}
     </section>
 
@@ -359,7 +364,7 @@ function BudgetDashboard({ budget, budgets, month, setMonth, actual, total, rema
       <section className="card budget-history"><div className="budget-heading"><div><h2>Budget vs actual</h2><p>Monthly totals across saved budgets.</p></div><div className="budget-legend"><span><i /> Budget</span><span><i /> Actual</span></div></div>
         {history.length ? <div className="budget-chart" role="img" aria-label="Budget versus actual spending by month">{history.map(item => <div className="budget-chart-month" key={item.id}><div className="budget-chart-bars"><i className="planned" style={{ height: `${Math.max(3, Number(item.total) / max * 100)}%` }} title={`Budget ${money(item.total)}`} /><i className="actual" style={{ height: `${Math.max(item.actual ? 3 : 0, item.actual / max * 100)}%` }} title={`Actual ${money(item.actual)}`} /></div><small>{item.label}</small></div>)}</div> : <div className="budget-chart-empty">Create budgets for multiple months to see a historical comparison.</div>}
       </section>
-      <section className="card budget-insights"><h2>Expense tracking</h2><p>Actuals are calculated from business expense transactions dated in {monthLabel}. Sales and founder draws are excluded.</p><p>To match spending to a budget category, use the same category label on the expense transaction.</p>{uncategorized > 0 && <p className="budget-alert warning">Uncategorized expenses: {money(uncategorized)}</p>}<span className="budget-suggestion-note">Existing categories: {suggestions.length ? suggestions.slice(0, 5).join(' · ') : 'No expense categories yet'}</span></section>
+      <section className="card budget-insights"><h2>Expense tracking</h2><p>Actuals are calculated from business expense transactions dated in {monthLabel}. Sales and founder draws are excluded.</p><p>Expense category names link transactions to the matching allocation. Transactions in categories without an allocation remain visible as unbudgeted spending.</p>{uncategorized > 0 && <p className="budget-alert warning">Unbudgeted spending: {money(uncategorized)}</p>}<span className="budget-suggestion-note">Expense categories: {suggestions.length ? suggestions.slice(0, 5).join(' · ') : 'No expense categories yet'}</span></section>
     </div>
   </section>;
 }
