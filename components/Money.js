@@ -39,7 +39,7 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
   const monthBusinessExpenses = allExpenses.filter(expense => expense.scope !== 'personal' && typeof expense.date === 'string' && expense.date.startsWith(budgetMonth));
   const actualSpending = sum(monthBusinessExpenses);
   const monthlyBudgetTotal = Number(activeBudget?.total || 0);
-  const budgetRemaining = monthlyBudgetTotal - actualSpending;
+  const budgetRemaining = activeBudget ? monthlyBudgetTotal - actualSpending : 0;
   const utilization = monthlyBudgetTotal ? actualSpending / monthlyBudgetTotal * 100 : 0;
   const budgetCategoryStats = (activeBudget?.categories || []).map(category => {
     const spent = sum(monthBusinessExpenses.filter(expense => String(expense.label || '').trim().toLocaleLowerCase() === category.name.trim().toLocaleLowerCase()));
@@ -145,7 +145,7 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
           put('budget', { ...activeBudget, categories: activeBudget.categories.filter(category => category.id !== categoryId) });
           setBudgetMessage('Category allocation removed. Related expenses remain in your transaction history.');
         }} />
-        {budgetModal && <BudgetModal key={activeBudget?.id || budgetMonth} budget={activeBudget} month={budgetMonth} suggestions={expenseCategorySuggestions} onClose={() => setBudgetModal(false)} onSave={async data => {
+        {budgetModal && <BudgetModal key={activeBudget?.id || budgetMonth} budget={activeBudget} month={budgetMonth} suggestions={expenseCategorySuggestions} money={money} onClose={() => setBudgetModal(false)} onSave={async data => {
           const result = await put('budget', { ...data, id: activeBudget?.id || `budget:${workspace?.id}:${data.month}` });
           setBudgetMessage(result ? 'Budget saved.' : 'Could not save the budget. Check your connection and try again.');
           if (result) setBudgetModal(false);
@@ -364,7 +364,7 @@ function BudgetDashboard({ budget, budgets, month, setMonth, actual, total, rema
   </section>;
 }
 
-function BudgetModal({ budget, month, suggestions, onClose, onSave }) {
+function BudgetModal({ budget, month, suggestions, money, onClose, onSave }) {
   const [name, setName] = useState(budget?.name || 'Monthly operating budget');
   const [total, setTotal] = useState(budget?.total ?? '');
   const [categories, setCategories] = useState(() => (budget?.categories || []).map(item => ({ ...item, amount: String(item.amount) })));
@@ -392,6 +392,6 @@ function BudgetModal({ budget, month, suggestions, onClose, onSave }) {
   return <div className="budget-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="budget-modal" role="dialog" aria-modal="true" aria-labelledby="budget-modal-title"><header className="budget-heading"><div><h2 id="budget-modal-title">{budget ? 'Edit monthly budget' : 'Create monthly budget'}</h2><p>{budget ? `Update your ${month} budget and allocations.` : `Set a plan for ${month}.`}</p></div><button type="button" className="x" onClick={onClose} aria-label="Close">×</button></header>
     <form onSubmit={save}><label className="budget-field">Budget name<input value={name} maxLength={100} onChange={event => setName(event.target.value)} required /></label><div className="budget-form-row"><label className="budget-field">Month<input type="month" value={month} disabled aria-describedby="budget-month-help" /></label><label className="budget-field">Total budget<input type="number" min="0.01" step="0.01" value={total} onChange={event => setTotal(event.target.value)} required /></label></div><small id="budget-month-help" className="budget-muted">A workspace can have one budget per month.</small>
       <div className="budget-category-heading"><b>Category allocations</b><button type="button" className="btn sm" onClick={addCategory}>＋ Add category</button></div><datalist id="budget-category-options">{suggestions.map(item => <option key={item} value={item} />)}</datalist><div className="budget-category-fields">{categories.map(category => <div className="budget-category-field-row" key={category.id}><input aria-label="Category name" list="budget-category-options" placeholder="Category name" value={category.name} onChange={event => update(category.id, 'name', event.target.value)} /><input aria-label="Allocated amount" type="number" min="0" step="0.01" placeholder="Amount" value={category.amount} onChange={event => update(category.id, 'amount', event.target.value)} /><button type="button" className="x" aria-label={`Remove ${category.name || 'category'}`} onClick={() => setCategories(rows => rows.filter(row => row.id !== category.id))}>×</button></div>)}{!categories.length && <p className="budget-empty-inline">No categories added. You can add categories now or later.</p>}</div>
-      <p className={'budget-allocation-balance' + (balance < -0.000001 ? ' neg' : '')}>{balance >= 0 ? `${new Intl.NumberFormat(undefined, { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 }).format(balance)} unallocated` : 'Category allocations exceed the total budget.'}</p>{error && <p className="budget-form-error" role="alert">{error}</p>}<footer className="budget-modal-actions"><button className="btn" type="button" onClick={onClose} disabled={saving}>Cancel</button><button className="btn pri" type="submit" disabled={saving}>{saving ? 'Saving…' : budget ? 'Save changes' : 'Create budget'}</button></footer>
+      <p className={'budget-allocation-balance' + (balance < -0.000001 ? ' neg' : '')}>{balance >= 0 ? `${money(balance)} unallocated` : 'Category allocations exceed the total budget.'}</p>{error && <p className="budget-form-error" role="alert">{error}</p>}<footer className="budget-modal-actions"><button className="btn" type="button" onClick={onClose} disabled={saving}>Cancel</button><button className="btn pri" type="submit" disabled={saving}>{saving ? 'Saving…' : budget ? 'Save changes' : 'Create budget'}</button></footer>
     </form></section></div>;
 }
