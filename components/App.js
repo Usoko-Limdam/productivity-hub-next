@@ -52,7 +52,10 @@ async function send(op, workspaceId) {
     ? await fetch('/api/items?id=' + encodeURIComponent(op.id) + '&workspaceId=' + encodeURIComponent(workspaceId), { method: 'DELETE' })
     : await fetch('/api/items', { method: 'POST', headers: H, body: JSON.stringify({ kind: op.kind, id: op.id, data: op.data, workspaceId }) });
   if (r.status === 401) { const e = new Error('expired'); e.expired = true; throw e; }
-  if (!r.ok) throw new Error('save failed');
+  if (!r.ok) {
+    const payload = await r.json().catch(() => null);
+    throw new Error(payload?.error || `Save failed (HTTP ${r.status}).`);
+  }
 }
 
 export default function App({ initial, workspace, workspaces }) {
@@ -95,7 +98,7 @@ export default function App({ initial, workspace, workspaces }) {
         await send(op, workspace.id); failed.current.delete(op.id); ok = true;
         if (op.kind === 'event') setItems(a => a.some(x => x.id === op.id) ? a.map(x => x.id === op.id ? { ...x, data: op.data } : x) : [...a, { id: op.id, kind: 'event', data: op.data }]);
       }
-      catch (e) { failed.current.set(op.id, op); if (e.expired) expired.current = true; }
+      catch (e) { op.error = e.message; failed.current.set(op.id, op); if (e.expired) expired.current = true; }
       pending.current--;
       if (!pending.current && !failed.current.size) {
         expired.current = false; report(true);
@@ -117,7 +120,7 @@ export default function App({ initial, workspace, workspaces }) {
   };
 
   const of = k => items.filter(x => x.kind === k).map(x => x.data);
-  const put = (kind, o) => {
+  const put = (kind, o, detailed = false) => {
     if (kind === 'event') {
       return run({ id: o.id, kind, data: o }).then(ok => {
         if (ok) setItems(a => a.some(x => x.id === o.id) ? a.map(x => x.id === o.id ? { ...x, data: o } : x) : [...a, { id: o.id, kind, data: o }]);
@@ -125,7 +128,8 @@ export default function App({ initial, workspace, workspaces }) {
       });
     }
     setItems(a => a.some(x => x.id === o.id) ? a.map(x => x.id === o.id ? { ...x, data: o } : x) : [...a, { id: o.id, kind, data: o }]);
-    return run({ id: o.id, kind, data: o });
+    const op = { id: o.id, kind, data: o };
+    return run(op).then(ok => detailed ? { ok, error: op.error || '' } : ok);
   };
   const del = id => { setItems(a => a.filter(x => x.id !== id)); run({ id, del: true }); };
   const go = (tab, sub = null) => {

@@ -137,8 +137,8 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
         </div>
         <BudgetDashboard budget={activeBudget} budgets={budgets} month={budgetMonth} setMonth={setBudgetMonth} actual={actualSpending} total={monthlyBudgetTotal} remaining={budgetRemaining} utilization={utilization} categories={budgetCategoryStats} uncategorized={uncategorizedSpending} allocated={allocatedTotal} unallocated={unallocatedTotal} expenses={allExpenses} money={money} suggestions={expenseCategorySuggestions} message={budgetMessage} onCreate={() => { setBudgetMessage(''); setBudgetModal(true); }} onEdit={() => { setBudgetMessage(''); setBudgetModal(true); }} onSaveBudget={async data => {
           const id = `budget:${workspace?.id}:${data.month}`;
-          const result = await put('budget', { ...data, id });
-          setBudgetMessage(result ? 'Budget saved.' : 'Could not save the budget. Check your connection and try again.');
+          const result = await put('budget', { ...data, id }, true);
+          setBudgetMessage(result.ok ? 'Budget saved.' : result.error);
           return result;
         }} onRemoveCategory={categoryId => {
           if (!activeBudget) return;
@@ -146,9 +146,9 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
           setBudgetMessage('Category allocation removed. Related expenses remain in your transaction history.');
         }} />
         {budgetModal && <BudgetModal key={activeBudget?.id || budgetMonth} budget={activeBudget} month={budgetMonth} suggestions={expenseCategorySuggestions} money={money} onClose={() => setBudgetModal(false)} onSave={async data => {
-          const result = await put('budget', { ...data, id: activeBudget?.id || `budget:${workspace?.id}:${data.month}` });
-          setBudgetMessage(result ? 'Budget saved.' : 'Could not save the budget. Check your connection and try again.');
-          if (result) setBudgetModal(false);
+          const result = await put('budget', { ...data, id: activeBudget?.id || `budget:${workspace?.id}:${data.month}` }, true);
+          setBudgetMessage(result.ok ? 'Budget saved.' : result.error);
+          if (result.ok) setBudgetModal(false);
           return result;
         }} />}
         <SalesChart sales={sales} money={money} range={appliedRange} />
@@ -384,8 +384,8 @@ function BudgetModal({ budget, month, suggestions, money, onClose, onSave }) {
     if (cleanCategories.reduce((sum_, category) => sum_ + category.amount, 0) > Number(total) + 0.000001) { setError('Category allocations cannot exceed the total budget.'); return; }
     setSaving(true); setError('');
     try {
-      const ok = await onSave({ name: name.trim(), month, total: Number(total), categories: cleanCategories });
-      if (!ok) setError('The budget could not be saved. Check your connection and try again.');
+      const result = await onSave({ name: name.trim(), month, total: Number(total), categories: cleanCategories });
+      if (!result?.ok) setError(result?.error || 'The budget could not be saved.');
     } catch { setError('The budget could not be saved. Check your connection and try again.'); }
     finally { setSaving(false); }
   };
