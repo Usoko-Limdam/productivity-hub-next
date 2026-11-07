@@ -203,7 +203,7 @@ export default function App({ initial, workspace, workspaces }) {
           ))}
         </nav>}
       </aside>
-      <section className="content">
+      <section className={`content${tab === 'money' || (isBravestone && tab === 'brave' && (route.sub || '').startsWith('money')) ? ' money-content' : ''}`}>
         {sync.failed > 0 && (
           <div className="banner" role="alert">
             <span>{sync.expired
