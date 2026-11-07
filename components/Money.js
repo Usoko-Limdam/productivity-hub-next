@@ -179,7 +179,7 @@ export default function Money({ of, put, del, money, sub, go, workspace }) {
       {!transactions && <div className="card">
         <h2>{sales_ ? 'Record a sale' : personal ? 'Record a founder draw' : 'Record a business expense'}</h2>
         <datalist id="sg">{suggest.map(s => <option key={s} value={s} />)}</datalist>
-        <form style={{ marginTop: 0 }} onSubmit={submit(d => put(kind, { id: uid(), date: d.date, label: d.label, amt: +d.amt, note: d.note, ...(sales_ ? {} : { scope: personal ? 'personal' : 'business', ...(personal ? {} : { category: d.category.trim() }) }) }))}>
+        <form className={!sales_ && !personal ? 'money-record-form' : ''} style={{ marginTop: 0 }} onSubmit={submit(d => put(kind, { id: uid(), date: d.date, label: d.label, amt: +d.amt, note: d.note, ...(sales_ ? {} : { scope: personal ? 'personal' : 'business', ...(personal ? {} : { category: d.category.trim() }) }) }))}>
           <input type="date" name="date" defaultValue={today} required aria-label="Date" />
           <input name="label" list={sales_ ? 'sg' : undefined} placeholder={sales_ ? 'Project / client' : personal ? 'What for (e.g. Founder withdrawal)' : 'Expense description (e.g. Facebook Ads)'} required aria-label={sales_ ? 'Sale description' : personal ? 'Founder draw description' : 'Expense description'} />
           {!sales_ && !personal && <label className="money-expense-category">Expense category<input name="category" list="money-expense-category-options-ledger" placeholder="Select or type a category" required aria-label="Expense category" /><datalist id="money-expense-category-options-ledger">{expenseCategorySuggestions.map(category => <option value={category} key={category} />)}</datalist></label>}

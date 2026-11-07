@@ -330,3 +330,5 @@ small.neg,.mut.neg{color:var(--danger)}
 @media(max-width:560px){.calendar-agenda-item:hover .calendar-agenda-copy,.calendar-agenda-item:focus-within .calendar-agenda-copy{padding-bottom:0}}
 
 .budget-unbudgeted-list{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding:12px 14px;border:1px solid color-mix(in srgb,#f59e0b 32%,var(--border));border-radius:10px;background:color-mix(in srgb,#f59e0b 5%,var(--surface));font-size:13px}.budget-unbudgeted-list>div{display:flex;justify-content:space-between;gap:12px;padding-bottom:6px;border-bottom:1px solid var(--border)}.budget-unbudgeted-list small{color:var(--mut);font-size:11px}
+
+.money-record-form{align-items:center}.money-record-form>input,.money-record-form>button{box-sizing:border-box;align-self:center;height:42px;min-height:42px}.money-record-form>input[type=date]{flex:0 1 174px}.money-record-form>input[name=amt]{flex:0 1 138px}.money-record-form>.money-expense-category{align-self:center;flex:1 1 220px}.money-record-form>.money-expense-category input{height:42px;min-height:42px}
